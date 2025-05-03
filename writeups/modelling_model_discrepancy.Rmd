@@ -563,7 +563,7 @@ ident_mult <- 0.001
 If we instead do this in `rstan`^[Using https://mc-stan.org/docs/2_19/stan-users-guide/simulating-from-a-gaussian-process.html.], we must first run the following `stan` block. Note that we add a small multiple of the identity matrix to the covariance matrix (here set to a value of `r ident_mult`) for computational stability when inverting the covariance matrix, particularly a problem if two or more of the input values are "close together" in input space^[Note that a small value is sometimes added to the diagonal of a correlation matrix when building an emulator but for a different reason, and in this case is referred to as the _nugget term_: it represents added noise, allowing for variability at the training data points. If you have a deterministic model, when you repeat a simulation you should get the same output and so have no noise at the training data. However, with some models (for example, a cloud simulation model) they can have a stochastic element to them, and running at the same settings can give slightly different outputs. Adding the nugget term means that the mean function of the fitted posterior emulator doesn't have to go directly through the training points, and this can lead to a smoother fit.]
 -- see @rasmussen06 and Figure 7 below from Jeremy.
 
-![Why we need to add a small multiple of the identity matrix to the covaraince matrix (JO).](./ident_mult.jpg){width=50%}
+![Why we need to add a small multiple of the identity matrix to the covaraince matrix (JO).](./figures/ident_mult.jpg){width=50%}
 
 ```{stan, gp-prior-setup-with-stan, output.var="gpstan", include=T, cache=TRUE}
 data {
