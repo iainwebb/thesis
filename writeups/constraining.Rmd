@@ -1,0 +1,722 @@
+---
+title: "Constraining"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+    keep_md: yes
+urlcolor: blue
+fontsize: 10pt
+bibliography: references.bib
+link-citations: yes
+linkcolor: blue
+nocite: |
+  
+
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{subfig}
+  - \usepackage{tcolorbox}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \usepackage[font=small,skip=0pt]{caption}
+  - \usepackage{tikz}
+  # - \usetikzlibrary{backgrounds}
+  - \usetikzlibrary{arrows,positioning,shapes.geometric}
+---
+
+# Setup
+
+We have two functions that both take only variables $x_1$ and $x_2$ as inputs:
+
+- $y = f(x_1, x_2)$ is the \textbf{constraint} function. This is a function whose output we are able to observe, and by doing so, at different values of $x_1$ and $x_2$, we hope to be able to constrain the output, reducing its a range to only plausible values based on observations.
+- $z = h(x_1, x_2)$ is the \textbf{forcing} function.
+
+We might hope that, having reduced the range of the output of $f$, the range of $h$ would also reduce. Below we explore how the alignment of the output surfaces of $f$ and $h$ with each other can affect whether this in practice happens.
+
+\begin{tikzpicture}[>=latex']
+        \tikzset{block/.style= {draw, rectangle, align=center,minimum width=2cm,minimum height=1cm},
+        rblock/.style={draw, shape=rectangle,rounded corners=1.5em,align=center,minimum width=2cm,minimum height=1cm},
+        input/.style={ % requires library shapes.geometric
+        draw,
+        trapezium,
+        trapezium left angle=60,
+        trapezium right angle=120,
+        minimum width=2cm,
+        align=center,
+        minimum height=1cm
+    },
+        }
+        \node [block]  (start) {Uniform prior of \\ inputs $x_1$ and $x_2$, \\ and corresponding \\ prior distribution \\ of both $y$ and $z$};
+        \node [block, right =0.75cm of start] (next) {$n$ observations \\ $\{\tilde{y}_1, \dots, \tilde{y}_n\}$ at \\ ``unknown'' input \\ variable settings \\ $\left\{(x_{1,1}, x_{2,1}), \dots, (x_{1,n}, x_{2,n})\right\}$};
+        \node [block, right =0.75cm of next] (then) {Use of \texttt{rstan} to \\ produce posterior \\ draws of $x_1$ and $x_2$, \\ and corresponding \\ values of $y$ and $z$};
+        \node [block, right =0.75cm of then] (finally) {Have the \\ observations \\ $\{\tilde{y}_1, \dots, \tilde{y}_n\}$ \\ constrained both $y$ \\ and $z$, or just $y$?};
+
+%% paths
+        \path[draw,->] (start) edge (next)
+                    (next) edge (then)
+                    (then) edge (finally)
+                    ;
+    \end{tikzpicture}
+
+```{r, include=F, cache=T}
+x_lower <- 0
+x_upper <- 5
+```
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Start with $X_1, X_2 \sim U$[`r x_lower`,`r x_upper`]
+\end{tcolorbox}
+
+```{r, echo=F, cache=T}
+n_s <- 5000
+```
+
+We generate a random sample of size `r n_s` of each input variable, plotted in Figure 1.
+
+```{r, echo=F, cache=T}
+x_1_s <- runif(n_s, x_lower, x_upper)
+x_2_s <- runif(n_s, x_lower, x_upper)
+df_x_s <- data.frame(x_1_s, x_2_s)
+```
+
+```{r, include=F}
+library(ggplot2)
+```
+
+```{r, include=F}
+library(latex2exp)
+```
+
+```{r, echo=F, fig.width=3, fig.height=3, fig.align="center", fig.cap="Draws from the (joint) uniform prior of $(x_1, x_2)$.", cache=T, warning=F}
+ggplot(df_x_s, aes(x = x_1_s, y = x_2_s)) +
+  geom_point(shape=20) +
+  theme_bw() +
+  xlab(TeX("$x_1$")) +
+  ylab(TeX("$x_2$")) +
+  guides(fill=guide_legend(title='MY NEW TITLE'))
+```
+
+# First forcing function
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Derive (using MC) $p(Z) \sim h(X_1, X_2)$
+\end{tcolorbox}
+
+We will assume that the forcing function is
+
+$$
+h(x_1, x_2) = \sqrt{100 - x_1^2 - x_2^2}.
+$$
+
+```{r, echo=F, cache=T}
+z_prior_s <- sqrt(100 - x_1_s^2 - x_2_s^2)
+df_s <- data.frame(x_1_s, x_2_s, z_prior_s)
+```
+
+This function is evaluated at the points selected by the random sample generated in the first step. Figure 2 illustrates how the value of $z$ is associated to the values of $x_1$ and $x_2$.
+
+```{r, echo=F, fig.width=3.75, fig.height=3, fig.align="center", fig.cap="As in Figure 1, but with the the colour of the points indicating the corresponding value of $z$ at each point.", cache=T}
+ggplot(df_s, aes(x = x_1_s, y = x_2_s, colour = z_prior_s)) +
+  geom_point(shape=20) +
+  scale_colour_gradient(low = "yellow", high = "red") +
+  theme_bw() +
+  xlab(TeX("$x_1$")) +
+  ylab(TeX("$x_2$")) +
+  theme(legend.title=element_blank())
+```
+
+```{r, echo=F}
+n<-100000000
+
+x_1 <- runif(n, x_lower, x_upper)
+x_2 <- runif(n, x_lower, x_upper)
+z_prior <- sqrt(100 - x_1^2 - x_2^2)
+y_prior <- sqrt(100 - x_1^2 - x_2^2)
+df <- data.frame(x_1, x_2, z_prior)
+```
+
+A histogram of the values of $z$ resulting from a new, much larger, random sample -- this time consisting of `r format(n, big.mark=",", scientific=F)` evaluations -- provides an empirical distribution of $p(Z)$; see Figure 3.
+
+```{r, fig.cap=paste("Approximate prior distribution for $p(Z)$ using evaluations of $h(x_1, x_2)$ at ", format(n, big.mark=",", scientific=F), " randomly selected values of $(x_1, x_2)$, both on [0, 5].", sep=""), echo=F, fig.width=4, fig.height=3, cache=T, warning=F}
+ggplot(df, aes(x=z_prior)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="white", bins=60) +
+  theme_bw() +
+  xlab(TeX("$z$"))
+# abline(v=sqrt(99))
+```
+
+## Attempt 1: Alignment measure of 0.97
+
+\begin{tcolorbox}
+Define $Y = f(X_1, X_2)$
+\end{tcolorbox}
+
+To start with we'll look at perfect alignment between the two output surfaces, and so
+
+$$
+f(x_1, x_2) = \sqrt{100 - x_1^2 - x_2^2}.
+$$
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Observe $\tilde{y} = Y + \epsilon$
+\end{tcolorbox}
+
+```{r, include=F, cache=T}
+x_1_1_check <- 2
+x_2_1_check <- 2
+```
+
+Let's start by observing one value of $Y$, $\tilde{y}_1$, at $(x_{1,1}, x_{2,1})$, the true value of $x_1$ and $x_2$ about which we're interested in learning. We'll choose $(x_{1,1}, x_{2,1})$ = (`r x_1_1_check`, `r x_2_1_check`). Let $\epsilon \sim N(0, 0.1^2)$ represent observation error.
+
+```{r, echo=T, results="hide"}
+x_1_1 <- 2
+x_2_1 <- 2
+y_tilde_1 <- sqrt(100 - (x_1_1)^2 - x_2_1^2) +  rnorm(1, 0, 0.1)
+y_tilde_1
+```
+
+```{r, echo=F}
+ifelse(x_1_1_check == x_1_1 & x_2_1_check == x_2_1, y_tilde_1, "FALSE")
+```
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Derive (using MCMC) $p(X_1, X_2 \: | \: \tilde{y})$
+\end{tcolorbox}
+
+```{r, rstan-load, include=F, message=F, cache=T}
+library(rstan)
+```
+
+```{stan, output.var="constraining1", include=T, cache=T}
+data {
+  real y_tilde ; // observations
+}
+parameters {
+  real x1 ;      // unknown real value of x1
+  real x2 ;      // unknown real value of x2
+}
+model {
+  y_tilde ~ normal((100 - x1^2 - x2^2)^0.5, 0.1) ; // likelihood
+  x1 ~ uniform(0,5) ;                                  // prior
+  x2 ~ uniform(0,5) ;                                  // prior
+}
+generated quantities {
+  real y = (100 - x1^2 - x2^2)^0.5 ;                   // posterior draws
+  real z = (100 - x1^2 - x2^2)^0.5 ;                   // posterior draws
+}
+```
+
+```{r, include=T, error=T, cache=T}
+sampling_iterations <- 1e4
+
+# set data in a way Stan understands
+data <- list(y_tilde = y_tilde_1)
+
+fit <- sampling(constraining1, 
+                data = data,
+                chains = 2, 
+                iter = sampling_iterations, 
+                warmup = sampling_iterations/2)
+```
+
+```{r, include=F, cache=T}
+chains <- rstan::extract(fit)
+```
+
+```{r, cache=T}
+fit
+```
+
+```{r, echo=F, cache=T, fig.height=2}
+traceplot(fit, pars=c('x1', 'x2'))
+```
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Generate $p(Z \: | \: \tilde{y})$ and compare with $p(Z)$
+\end{tcolorbox}
+
+Both the constraint function $f(x_1, x_2)$ and the forcing function $h(x_1, x_2)$ have been constrained: 
+
+```{r}
+max(y_prior) - min(y_prior)
+
+max(chains$y[5001:10000]) - min(chains$y[5001:10000])
+
+# reduction
+round(100*(1 -
+        (max(chains$y[5001:10000]) - min(chains$y[5001:10000])) / (max(y_prior) - min(y_prior))
+        
+))
+```
+
+```{r curved-y-prior-post-comp-097, fig.show="hold", out.width="50%", fig.height=4, echo=F, fig.cap="Prior and posterior draws of $y$, where $y = f(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}.$", warning=F, cache=T}
+hist(y_prior, breaks = 50, freq=F, main="", xlim = c(7,10), xlab=expression(y))
+
+hist(chains$y[5001:10000], breaks = 50, freq=F, main="", xlim = c(7,10), xlab=expression(y))
+```
+
+```{r z-prior-post-comp-097, fig.show="hold", out.width="50%", fig.height=4, echo=F, fig.cap="Prior (reprinted from Figure 3) and posterior draws of $z$, where $z = h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}.$", warning=F, cache=T}
+hist(z_prior, breaks = 50, freq=F, main="", xlim = c(7,10), xlab=expression(z))
+
+hist(chains$z[5001:10000], breaks = 50, freq=F, main="", xlim = c(7,10), xlab=expression(z))
+```
+
+The posterior distribution for $x_1$ and $x_2$ follows contour lines (Figure 6) in both $f$ and $h$ (Figure 7):
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Contour plots for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$.", warning=F}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+
+# Data
+z_g <- sqrt(100 - outer(x ^ 2, y ^ 2, "+")) + 5 - 5
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+```{r, fig.show="hold", out.width="50%", fig.height=5.25, echo=F, fig.cap="Posterior draws of $x_1$ and $x_2$, with the colour indicating the values of the constraint function $h(x_1, x_2)$ (left) and the forcing function $f(x_1, x_2)$ (right).", warning=F, cache=T}
+df_post_1 <- data.frame(chains$x1[5001:10000], chains$x2[5001:10000], chains$z[5001:10000])
+colnames(df_post_1) <- c("x1_post_1", "x2_post_1", "z_post_1")
+
+ggplot(df_post_1, aes(x = x1_post_1, y = x2_post_1, colour = z_post_1)) +
+  geom_point(shape=20) +
+  scale_colour_gradient(low = "yellow", high = "red") +
+  theme_bw() +
+  xlab(TeX("$x_1$")) +
+  ylab(TeX("$x_2$")) +
+  labs(fill= "z") +
+  xlim(0,5) +
+  ylim(0,5)
+
+df_post_1 <- data.frame(chains$x1[5001:10000], chains$x2[5001:10000], chains$y[5001:10000])
+colnames(df_post_1) <- c("x1_post_1", "x2_post_1", "y_post_1")
+
+ggplot(df_post_1, aes(x = x1_post_1, y = x2_post_1, colour = y_post_1)) +
+  geom_point(shape=20) +
+  scale_colour_gradient(low = "yellow", high = "red") +
+  theme_bw() +
+  xlab(TeX("$x_1$")) +
+  ylab(TeX("$x_2$")) +
+  labs(fill= "y") +
+  xlim(0,5) +
+  ylim(0,5)
+```
+
+\newpage
+
+## Attempt 2: Alignment measure of 0.48
+
+\begin{tcolorbox}
+Define $Y = f(X_1, X_2)$
+\end{tcolorbox}
+
+Next we'll look at a function for $y$ that resulted in an alignment measure of 0.48 (see \textit{GPs and differentiation}, Section 3.1.2.1):
+
+$$
+f(x_1, x_2) = \sqrt{100 - (x_1 - 5)^2 - x_2^2}.
+$$
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Observe $\tilde{y} = Y + \epsilon$
+\end{tcolorbox}
+
+```{r, include=F, cache=T}
+x_1_1_check <- 2
+x_2_1_check <- 2
+```
+
+Let's start by observing one value of $Y$, $\tilde{y}_1$, at $(x_{1,1}, x_{2,1})$, the true value of $x_1$ and $x_2$ about which we're interested in learning. We'll choose $(x_{1,1}, x_{2,1})$ = (`r x_1_1_check`, `r x_2_1_check`). Let $\epsilon \sim N(0, 0.1^2)$ represent observation error.
+
+```{r, echo=T, results="hide"}
+x_1_1 <- 2
+x_2_1 <- 2
+y_tilde_1 <- sqrt(100 - (x_1_1-5)^2 - x_2_1^2) +  rnorm(1, 0, 0.1)
+y_tilde_1
+```
+
+```{r, echo=F}
+ifelse(x_1_1_check == x_1_1 & x_2_1_check == x_2_1, y_tilde_1, "FALSE")
+```
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Derive (using MCMC) $p(X_1, X_2 \: | \: \tilde{y})$
+\end{tcolorbox}
+
+```{stan, output.var="constraining1", include=T, cache=T}
+data {
+  real y_tilde ; // observations
+}
+parameters {
+  real x1 ;      // unknown real value of x1
+  real x2 ;      // unknown real value of x2
+}
+model {
+  y_tilde ~ normal((100 - (x1-5)^2 - x2^2)^0.5, 0.1) ; // likelihood
+  x1 ~ uniform(0,5) ;                                  // prior
+  x2 ~ uniform(0,5) ;                                  // prior
+}
+generated quantities {
+  real y = (100 - (x1-5)^2 - x2^2)^0.5 ;                   // posterior draws
+  real z = (100 - x1^2 - x2^2)^0.5 ;                   // posterior draws
+}
+```
+
+```{r, eval=F, cache=T}
+sampling_iterations <- 1e4
+
+# set data in a way Stan understands
+data <- list(y_tilde = y_tilde_1)
+
+fit <- sampling(constraining1, 
+                data = data,
+                chains = 2, 
+                iter = sampling_iterations, 
+                warmup = sampling_iterations/2)
+```
+
+```{r, include=F, error=F, cache=T}
+sampling_iterations <- 1e4
+
+# set data in a way Stan understands
+data <- list(y_tilde = y_tilde_1)
+
+fit <- sampling(constraining1, 
+                data = data,
+                chains = 2, 
+                iter = sampling_iterations, 
+                warmup = sampling_iterations/2)
+```
+
+```{r, include=F, cache=T}
+chains <- rstan::extract(fit)
+```
+
+```{r, cache=T}
+fit
+```
+
+```{r, echo=F, cache=T, fig.height=2}
+traceplot(fit, pars=c('x1', 'x2'))
+```
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Generate $p(Z \: | \: \tilde{y})$ and compare with $p(Z)$
+\end{tcolorbox}
+
+The constraint function $f(x_1, x_2)$ has been constrained but the forcing function $h(x_1, x_2)$ has not:
+
+```{r}
+y_prior <- sqrt(100 - (x_1-5)^2 - x_2^2)
+```
+
+```{r}
+max(z_prior) - min(z_prior)
+
+max(chains$z[5001:10000]) - min(chains$z[5001:10000])
+
+# reduction
+round(100*(1 -
+        (max(chains$z[5001:10000]) - min(chains$z[5001:10000])) / (max(z_prior) - min(z_prior))
+        
+))
+```
+
+```{r curved-y-prior-post-comp-048, fig.show="hold", out.width="50%", fig.height=4, echo=F, fig.cap="Prior and posterior draws of $y$, where $y = f = \\sqrt{100 - (x_1-5)^2 - x_2^2}.$", warning=F, cache=T}
+hist(y_prior, breaks = 50, freq=F, main="", xlim = c(7,10), xlab=expression(y))
+
+hist(chains$y[5001:10000], breaks = 50, freq=F, main="", xlim = c(7,10), xlab=expression(y))
+```
+
+```{r z-prior-post-comp-048, fig.show="hold", out.width="50%", fig.height=4, echo=F, fig.cap="Prior (reprinted from Figure 3) and posterior draws of $z$, where $z = h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}.$", warning=F, cache=T}
+hist(z_prior, breaks = 50, freq=F, main="", xlim = c(7,10), xlab=expression(z))
+
+hist(chains$z[5001:10000], breaks = 50, freq=F, main="", xlim = c(7,10), xlab=expression(z))
+```
+
+The posterior distribution for $x_1$ and $x_2$ follows contour lines (Figure 10) in $f$ but not $h$ (Figure 11):
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Contour plots for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - (x_1-5)^2 - x_2^2}$.", warning=F}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+
+# Data
+z_g <- sqrt(100 - outer((x-5) ^ 2, y ^ 2, "+")) + 5 - 5
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+```{r, fig.show="hold", out.width="50%", fig.height=5.25, echo=F, fig.cap="Posterior draws of $x_1$ and $x_2$, with the colour indicating the values of the constraint function $h(x_1, x_2)$ (left) and the forcing function $f(x_1, x_2)$ (right).", warning=F, cache=T}
+df_post_1 <- data.frame(chains$x1[5001:10000], chains$x2[5001:10000], chains$z[5001:10000])
+colnames(df_post_1) <- c("x1_post_1", "x2_post_1", "z_post_1")
+
+ggplot(df_post_1, aes(x = x1_post_1, y = x2_post_1, colour = z_post_1)) +
+  geom_point(shape=20) +
+  scale_colour_gradient(low = "yellow", high = "red") +
+  theme_bw() +
+  xlab(TeX("$x_1$")) +
+  ylab(TeX("$x_2$")) +
+  labs(fill= "z") +
+  xlim(0,5) +
+  ylim(0,5)
+
+df_post_1 <- data.frame(chains$x1[5001:10000], chains$x2[5001:10000], chains$y[5001:10000])
+colnames(df_post_1) <- c("x1_post_1", "x2_post_1", "y_post_1")
+
+ggplot(df_post_1, aes(x = x1_post_1, y = x2_post_1, colour = y_post_1)) +
+  geom_point(shape=20) +
+  scale_colour_gradient(low = "yellow", high = "red") +
+  theme_bw() +
+  xlab(TeX("$x_1$")) +
+  ylab(TeX("$x_2$")) +
+  labs(fill= "y") +
+  xlim(0,5) +
+  ylim(0,5)
+```
+
+\newpage
+
+
+# Second forcing function
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Derive (using MC) $p(Z) \sim h(X_1, X_2)$
+\end{tcolorbox}
+
+We will assume that the forcing function is
+
+$$
+h(x_1, x_2) = x_1 + x_2.
+$$
+
+```{r, echo=F, cache=T}
+z_prior_s <- x_1_s + x_2_s
+df_s <- data.frame(x_1_s, x_2_s, z_prior_s)
+```
+
+This function is evaluated at the points selected by the random sample generated in the first step. Figure 12 illustrates how the value of $z$ is associated to the values of $x_1$ and $x_2$.
+
+```{r, echo=F, fig.width=3.75, fig.height=3, fig.align="center", fig.cap="As in Figure 1, but with the the colour of the points indicating the corresponding value of $z$ at each point.", cache=T}
+ggplot(df_s, aes(x = x_1_s, y = x_2_s, colour = z_prior_s)) +
+  geom_point(shape=20) +
+  scale_colour_gradient(low = "yellow", high = "red") +
+  theme_bw() +
+  xlab(TeX("$x_1$")) +
+  ylab(TeX("$x_2$")) +
+  theme(legend.title=element_blank())
+```
+
+```{r, echo=F}
+n<-100000000
+
+x_1 <- runif(n, x_lower, x_upper)
+x_2 <- runif(n, x_lower, x_upper)
+z_prior <- x_1 + x_2
+y_prior <- -x_1 + x_2
+df <- data.frame(x_1, x_2, z_prior)
+```
+
+A histogram of the values of $z$ resulting from a new, much larger, random sample -- this time consisting of `r format(n, big.mark=",", scientific=F)` evaluations -- provides an empirical distribution of $p(Z)$; see Figure 13.
+
+```{r, fig.cap=paste("Approximate prior distribution for $p(Z)$ using evaluations of $h(x_1, x_2)$ at ", format(n, big.mark=",", scientific=F), " randomly selected values of $(x_1, x_2)$, both on [0, 5].", sep=""), echo=F, fig.width=4, fig.height=3, cache=T, warning=F}
+ggplot(df, aes(x=z_prior)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="white", bins=60) +
+  theme_bw() +
+  xlab(TeX("$z$"))
+```
+
+## Attempt 3: Alignment measure of 0
+
+\begin{tcolorbox}
+Define $Y = f(X_1, X_2)$
+\end{tcolorbox}
+
+Next we'll look at a function for $y$ that resulted in an alignment measure of 0 (see \textit{GPs and differentiation}, Section 3.2.2.1):
+
+$$
+f(x_1, x_2) = -x_1 + x_2.
+$$
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Observe $\tilde{y} = Y + \epsilon$
+\end{tcolorbox}
+
+```{r, include=F, cache=T}
+x_1_1_check <- 2
+x_2_1_check <- 2
+```
+
+Let's start by observing one value of $Y$, $\tilde{y}_1$, at $(x_{1,1}, x_{2,1})$, the true value of $x_1$ and $x_2$ about which we're interested in learning. We'll choose $(x_{1,1}, x_{2,1})$ = (`r x_1_1_check`, `r x_2_1_check`). Let $\epsilon \sim N(0, 0.1^2)$ represent observation error.
+
+```{r, echo=T, results="hide"}
+x_1_1 <- 2
+x_2_1 <- 2
+y_tilde_1 <- -x_1_1 + x_2_1 +  rnorm(1, 0, 0.1)
+y_tilde_1
+```
+
+```{r, echo=F}
+ifelse(x_1_1_check == x_1_1 & x_2_1_check == x_2_1, y_tilde_1, "FALSE")
+```
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Derive (using MCMC) $p(X_1, X_2 \: | \: \tilde{y})$
+\end{tcolorbox}
+
+```{stan, output.var="constraining1", include=T, cache=T}
+data {
+  real y_tilde ; // observations
+}
+parameters {
+  real x1 ;      // unknown real value of x1
+  real x2 ;      // unknown real value of x2
+}
+model {
+  y_tilde ~ normal(-x1 + x2, 0.1) ; // likelihood
+  x1 ~ uniform(0,5) ;                                  // prior
+  x2 ~ uniform(0,5) ;                                  // prior
+}
+generated quantities {
+  real y = -x1 + x2 ;                   // posterior draws
+  real z = x1 + x2 ;                   // posterior draws
+}
+```
+
+```{r, include=T, error=T, cache=T}
+sampling_iterations <- 1e4
+
+# set data in a way Stan understands
+data <- list(y_tilde = y_tilde_1)
+
+fit <- sampling(constraining1, 
+                data = data,
+                chains = 2, 
+                iter = sampling_iterations, 
+                warmup = sampling_iterations/2)
+```
+
+```{r, include=F, cache=T}
+chains <- rstan::extract(fit)
+```
+
+```{r, cache=T}
+fit
+```
+
+```{r, echo=F, cache=T, fig.height=2}
+traceplot(fit, pars=c('x1', 'x2'))
+```
+
+\vspace{0.75cm}
+\begin{tcolorbox}
+Generate $p(Z \: | \: \tilde{y})$ and compare with $p(Z)$
+\end{tcolorbox}
+
+The constraint function $f(x_1, x_2)$ has been constrained but the forcing function $h(x_1, x_2)$ has not:
+
+```{r}
+max(y_prior) - min(y_prior)
+
+max(chains$y[5001:10000]) - min(chains$y[5001:10000])
+
+# reduction
+round(100*(1 -
+        (max(chains$y[5001:10000]) - min(chains$y[5001:10000])) / (max(y_prior) - min(y_prior))
+))
+```
+
+```{r}
+max(z_prior) - min(z_prior)
+
+max(chains$z[5001:10000]) - min(chains$z[5001:10000])
+
+# reduction
+(100*(1 -
+        (max(chains$z[5001:10000]) - min(chains$z[5001:10000])) / (max(z_prior) - min(z_prior))
+))
+```
+
+```{r, fig.show="hold", out.width="50%", fig.height=4, echo=F, fig.cap="Prior and posterior draws of $y$, where $y = f(x_1, x_2) = -x_1 + x_2.$", warning=F, cache=T}
+hist(y_prior, breaks = 50, freq=F, main="", 
+     xlim = c(-5,5), 
+     xlab=expression(y))
+
+hist(chains$y[5001:10000], breaks = 50, freq=F, main="", 
+     xlim = c(-5,5), 
+     xlab=expression(y))
+```
+
+```{r, fig.show="hold", out.width="50%", fig.height=4, echo=F, fig.cap="Prior (reprinted from Figure 13) and posterior draws of $z$, where $z = h(x_1, x_2) = x_1 + x_2.$", warning=F, cache=T}
+hist(z_prior, breaks = 50, freq=F, main="", 
+     xlim = c(0,10), 
+     xlab=expression(z))
+
+hist(chains$z[5001:10000], breaks = 50, freq=F, main="", 
+     xlim = c(0,10), 
+     xlab=expression(z))
+```
+
+The posterior distribution for $x_1$ and $x_2$ follows contour lines (Figure 16) in both $f$ and $h$ (Figure1 7):
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Contour plots for the functions $h(x_1, x_2) = -x_1 + x_2$ and $f(x_1, x_2) = x_1 + x_2$.", warning=F}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- outer(-x, y, "+")
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+
+# Data
+z_g <- outer(x, y, "+")
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+```{r, fig.show="hold", out.width="50%", fig.height=5.25, echo=F, fig.cap="Both the constraint function $h(x_1, x_2)$ and the forcing function $f(x_1, x_2)$ have been constrained.", warning=F, cache=T}
+df_post_1 <- data.frame(chains$x1[5001:10000], chains$x2[5001:10000], chains$z[5001:10000])
+colnames(df_post_1) <- c("x1_post_1", "x2_post_1", "z_post_1")
+
+ggplot(df_post_1, aes(x = x1_post_1, y = x2_post_1, colour = z_post_1)) +
+  geom_point(shape=20) +
+  scale_colour_gradient(low = "yellow", high = "red") +
+  theme_bw() +
+  xlab(TeX("$x_1$")) +
+  ylab(TeX("$x_2$")) +
+  labs(fill= "z") +
+  xlim(0,5) +
+  ylim(0,5)
+
+df_post_1 <- data.frame(chains$x1[5001:10000], chains$x2[5001:10000], chains$y[5001:10000])
+colnames(df_post_1) <- c("x1_post_1", "x2_post_1", "y_post_1")
+
+ggplot(df_post_1, aes(x = x1_post_1, y = x2_post_1, colour = y_post_1)) +
+  geom_point(shape=20) +
+  scale_colour_gradient(low = "yellow", high = "red") +
+  theme_bw() +
+  xlab(TeX("$x_1$")) +
+  ylab(TeX("$x_2$")) +
+  labs(fill= "y") +
+  xlim(0,5) +
+  ylim(0,5)
+```
+\newpage
+
+# Citations
