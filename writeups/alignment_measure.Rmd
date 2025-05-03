@@ -1,0 +1,1386 @@
+---
+title: "Alignment measure"
+author: "How to compare the alignment of two gradient fields"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+    keep_md: yes
+urlcolor: blue
+bibliography: references.bib
+link-citations: yes
+linkcolor: blue
+nocite: |
+  
+
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{subfig}
+  - \usepackage{tcolorbox}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \usepackage[font=small,skip=0pt]{caption}
+---
+
+```{r, load_packages, include=F}
+# Load in the required libraries for data manipulation
+# and multivariate normal distribution
+require(MASS)
+require(plyr)
+require(reshape2)
+require(ggplot2)
+```
+
+To define the comparison measure, we'll work through the steps agreed upon by Jonathan and Manolis:
+
+\textcircled{\raisebox{-0.9pt}{\textbf{1}}} \textbf{Computation of partial derivatives w.r.t. the parameters used the test the case}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{2}}} \textbf{Repeat Step 1 for the second response surface}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{3}}} \textbf{Normalise vectors of partial derivatives}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{4}}} \textbf{Compute the dot product and take the absolute values}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{5}}} \textbf{Repeat the process over the entire parameter space}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{6}}} \textbf{Sum all together and divide by the number of discrete points}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{7}}} \textbf{Check how close this number is to 1}
+
+The function against which the others will be compared is:
+
+$$
+h(x_1, x_2) = \sqrt{100 - x_1^2 - x_2^2}
+$$
+
+which has the following partial derivatives:
+
+$$
+\begin{aligned}
+\frac{\partial h(x_1, x_2)}{\partial x_1} &=
+-\frac{x_1}{\sqrt{100 - x_1^2 - x_2^2}}, \\
+\frac{\partial h(x_1, x_2)}{\partial x_2} &=
+-\frac{x_2}{\sqrt{100 - x_1^2 - x_2^2}}.
+\end{aligned}
+$$
+
+The slope field (containing vectors
+$\begin{bmatrix}
+  \frac{\partial h(x_1, x_2)}{\partial x_1} \\
+  \frac{\partial h(x_1, x_2)}{\partial x_2}
+\end{bmatrix}$
+evaluated at the starting point of the vector) and contour plot of $f$ are shown in Figure 1.
+
+```{r, include=F}
+Df1_x1 <- function(x1, x2){
+  (1/2)*(100 - x1^2 - x2^2)^(-1/2) * (-2*x1)
+}
+Df1_x2 <- function(x1, x2){
+  (1/2)*(100 - x1^2 - x2^2)^(-1/2) * (-2*x2)
+}
+```
+
+```{r curved-sf-and-cp-for-h, fig.show="hold", out.width="50%", fig.height=6.75, echo=F, fig.cap="Slope field and contour plot for the function $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$.", warning=F}
+f1 <- expression(
+  (100 - x1^2 - x2^2)^(1/2)
+)
+# D(f1, "x1")
+# D(f1, "x2")
+
+vector_field_1 <- expand.grid(x1=seq(0, 5, 1), x2=seq(0, 5, 1))
+vector_field_1$vx1 <- with(vector_field_1, Df1_x1(x1, x2))
+vector_field_1$vx2 <- with(vector_field_1, Df1_x2(x1, x2))
+
+library(grid)
+arrow_scale <- 1
+ggplot(vector_field_1, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+vx1/arrow_scale, yend = x2+vx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25) +
+  xlim(0,5) +
+  ylim(0,5) +
+  theme_gray(base_size = 24)
+
+library(graphics)
+
+# Data
+x <- -10:10
+y <- -10:10
+z <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1, xlab="x1", ylab="x2")
+```
+
+```{r, include=F, message=F}
+library(dplyr)
+```
+
+```{r, echo=F}
+n_vector_field_1 <- vector_field_1
+for (i in 1:36) {
+  n_vector_field_1$vx1[i] <- vector_field_1$vx1[i] / sqrt((vector_field_1$vx1[i])^2 + (vector_field_1$vx2[i])^2)
+}
+for (i in 1:36) {
+  n_vector_field_1$vx2[i] <- vector_field_1$vx2[i] / sqrt((vector_field_1$vx1[i])^2 + (vector_field_1$vx2[i])^2)
+}
+```
+
+```{r, include=F}
+n_vector_field_1 <- n_vector_field_1 %>% replace(is.na(.), 0)
+```
+
+To run through the steps once, we'll make $f$ the same function as $h$, meaning
+
+$$
+f(x_1, x_2) = \sqrt{100 - x_1^2 - x_2^2}
+$$
+
+```{r, include=F}
+Df2_x1 <- function(x1, x2){
+  (1/2)*(100 - x1^2 - x2^2)^(-1/2) * (-2*x1)
+}
+Df2_x2 <- function(x1, x2){
+  (1/2)*(100 - x1^2 - x2^2)^(-1/2) * (-2*x2)
+}
+```
+
+which has partial derivatives, with slope field and contour plot shown in Figure 2:
+
+$$
+\begin{aligned}
+\frac{\partial f(x_1, x_2)}{\partial x_1} &=
+-\frac{x_1}{\sqrt{100 - x_1^2 - x_2^2}} \\
+\frac{\partial f(x_1, x_2)}{\partial x_2} &=
+-\frac{x_2}{\sqrt{100 - x_1^2 - x_2^2}}
+\end{aligned}
+$$
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Slope field and contour plot for the function $f(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$.", warning=F}
+f2 <- expression(
+  (100 - x1^2 - x2^2)^(1/2)
+)
+# D(f1, "x1")
+# D(f1, "x2")
+
+vector_field_2 <- expand.grid(x1=seq(0, 5, 1), x2=seq(0, 5, 1))
+vector_field_2$vx1 <- with(vector_field_2, Df2_x1(x1, x2))
+vector_field_2$vx2 <- with(vector_field_2, Df2_x2(x1, x2))
+
+library(grid)
+arrow_scale <- 1
+ggplot(vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+vx1/arrow_scale, yend = x2+vx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25) +
+  xlim(0,5) +
+  ylim(0,5)
+
+library(graphics)
+
+# Data
+x <- -10:10
+y <- -10:10
+z <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+The vectors of partial derivatives of both $h$ and $f$ are normalised, shown by the slope fields in Figure 3.
+
+```{r, include=F}
+normal_vector_field_1 <- vector_field_1
+colnames(normal_vector_field_1) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_1$nvx1 <- vector_field_1$vx1 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2)
+normal_vector_field_1$nvx2 <- vector_field_1$vx2 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2) 
+normal_vector_field_1 <- replace(normal_vector_field_1, is.na(normal_vector_field_1), 0)
+```
+
+```{r, include=F}
+normal_vector_field_2 <- vector_field_2
+colnames(normal_vector_field_2) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_2$nvx1 <- vector_field_2$vx1 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2)
+normal_vector_field_2$nvx2 <- vector_field_2$vx2 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2) 
+normal_vector_field_2 <- replace(normal_vector_field_2, is.na(normal_vector_field_2), 0)
+```
+
+```{r, fig.show="hold", out.width="40%", fig.height = 6, echo=F, fig.cap="Normalised slope fields for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$.", warning=F}
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_1, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+```
+
+The dot product for each of the 36 pairs of corresponding normalised vectors are calculated, their absolute values taken, and the mean of these found.
+
+```{r, include=F}
+abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)
+```
+
+```{r, include=F}
+measure_1 <- sum(abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)) /
+  length(vector_field_1$x1)
+```
+
+For functions $h(x_1, x_2)$ and $f(x_1, x_2)$, whose contours plots are reprinted in Figure 4 below, we get a number of \textbf{`r round(measure_1,2)`}. This is extremely close to 1, which is want we would expect, since the contours match exactly. The only reason this is not exactly 1 is that at $(0,0)$, the dot product is that of two zero vectors.
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Contour plots for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$.", warning=F}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+
+# Data
+z_g <- sqrt(100 - outer(x ^ 2, y ^ 2, "+")) + 5 - 5
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+The same is done for more functions paired with the form of $h$ used above, and with a different form of $h$ (inclined plane). The results are summarised over the next few pages.
+
+### Bad agreement
+
+#### First try
+
+\textbf{}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{2}}} \textbf{Repeat Step 1 for the second response surface.}
+
+$f(x_1, x_2)$ now takes the form:
+
+$$
+f(x_1, x_2) = \sqrt{100 - (x_1-5)^2 - x_2^2}
+$$
+
+```{r, include=F}
+Df2_x1 <- function(x1, x2){
+  (1/2)*(100 - (x1-5)^2 - x2^2)^(-1/2) * (-2*(x1-5))
+}
+Df2_x2 <- function(x1, x2){
+  (1/2)*(100 - (x1-5)^2 - x2^2)^(-1/2) * (-2*x2)
+}
+```
+
+which has partial derivatives, with slope field and contour plot shown in Figure 11:
+
+$$
+\begin{aligned}
+\frac{\partial f(x_1, x_2)}{\partial x_1} &=
+-\frac{x_1 - 5}{\sqrt{100 - (x_1-5)^2 - x_2^2}} \\
+\frac{\partial f(x_1, x_2)}{\partial x_2} &=
+-\frac{x_2}{\sqrt{100 - (x_1-5)^2 - x_2^2}}
+\end{aligned}
+$$
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Slope field and contour plot for the function $f(x_1, x_2) = \\sqrt{100 - (x_1-5)^2 - x_2^2}$.", warning=F}
+f2 <- expression(
+  (100 - x1^2 - x2^2)^(1/2)
+)
+# D(f1, "x1")
+# D(f1, "x2")
+
+vector_field_2 <- expand.grid(x1=seq(0, 5, 1), x2=seq(0, 5, 1))
+vector_field_2$vx1 <- with(vector_field_2, Df2_x1(x1, x2))
+vector_field_2$vx2 <- with(vector_field_2, Df2_x2(x1, x2))
+
+library(grid)
+arrow_scale <- 1
+ggplot(vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+vx1/arrow_scale, yend = x2+vx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25) +
+  xlim(0,5) +
+  ylim(0,5)
+
+library(graphics)
+
+# Data
+x <- -10:10
+y <- -10:10
+z <- sqrt(100 - outer((x-5) ^ 2, y ^ 2, "+"))
+
+contour(x, y, z, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{3}}} \textbf{Normalise vectors of partial derivatives.}
+
+This is done, and a slope field showing these normalised vectors is shown in Figure 12.
+
+```{r, include=F}
+normal_vector_field_1 <- vector_field_1
+colnames(normal_vector_field_1) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_1$nvx1 <- vector_field_1$vx1 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2)
+normal_vector_field_1$nvx2 <- vector_field_1$vx2 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2) 
+normal_vector_field_1 <- replace(normal_vector_field_1, is.na(normal_vector_field_1), 0)
+```
+
+```{r, include=F}
+normal_vector_field_2 <- vector_field_2
+colnames(normal_vector_field_2) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_2$nvx1 <- vector_field_2$vx1 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2)
+normal_vector_field_2$nvx2 <- vector_field_2$vx2 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2) 
+normal_vector_field_2 <- replace(normal_vector_field_2, is.na(normal_vector_field_2), 0)
+```
+
+```{r, fig.show="hold", out.width="40%", fig.height = 6, echo=F, fig.cap="Normalised slope fields for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - (x_1-5)^2 - x_2^2}$.", warning=F}
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_1, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+```
+
+Steps \textcircled{\raisebox{-0.9pt}{\textbf{4}}}-\textcircled{\raisebox{-0.9pt}{\textbf{6}}} are performed together, and the result of Step \textcircled{\raisebox{-0.9pt}{\textbf{6}}} is discussed in Step \textcircled{\raisebox{-0.9pt}{\textbf{7}}}.
+
+\textcircled{\raisebox{-0.9pt}{\textbf{4}}} \textbf{Compute the dot product and take the absolute values.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{5}}} \textbf{Repeat the process over the entire parameter space.}
+
+```{r, include=F}
+abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{6}}} \textbf{Sum all together and divide by the number of discrete points.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{7}}} \textbf{Check how close this number is to 1.}
+
+```{r, include=F}
+measure_2 <- sum(abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)) /
+  length(vector_field_1$x1)
+```
+
+For functions $h(x_1, x_2)$ and $f(x_1, x_2)$, whose contours plots are reprinted in Figure 13 below, we get a number of \textbf{`r round(measure_2,2)`}.
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Contour plots for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - (x_1-5)^2 - x_2^2}$.", warning=F}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+
+# Data
+z_g <- sqrt(100 - outer((x-5) ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+\newpage
+
+#### Second try
+
+\textbf{}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{2}}} \textbf{Repeat Step 1 for the second response surface.}
+
+$f(x_1, x_2)$ now takes the form:
+
+$$
+f(x_1, x_2) = \sqrt{100 - x_1^2 - (x_2-5)^2}
+$$
+
+```{r, include=F}
+Df2_x1 <- function(x1, x2){
+  (1/2)*(100 - x1^2 - (x2-5)^2)^(-1/2) * (-2*x1)
+}
+Df2_x2 <- function(x1, x2){
+  (1/2)*(100 - x1^2 - (x2-5)^2)^(-1/2) * (-2*(x2-5))
+}
+```
+
+which has partial derivatives, with slope field and contour plot shown in Figure 14:
+
+$$
+\begin{aligned}
+\frac{\partial f(x_1, x_2)}{\partial x_1} &=
+-\frac{x_1}{\sqrt{100 - x_1^2 - (x_2-5)^2}} \\
+\frac{\partial f(x_1, x_2)}{\partial x_2} &=
+-\frac{x_2-5}{\sqrt{100 - x_1^2 - (x_2-5)^2}}
+\end{aligned}
+$$
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Slope field and contour plot for the function $f(x_1, x_2) = \\sqrt{100 - x_1^2 - (x_2-5)^2}$.", warning=F}
+f2 <- expression(
+  (100 - x1^2 - x2^2)^(1/2)
+)
+# D(f1, "x1")
+# D(f1, "x2")
+
+vector_field_2 <- expand.grid(x1=seq(0, 5, 1), x2=seq(0, 5, 1))
+vector_field_2$vx1 <- with(vector_field_2, Df2_x1(x1, x2))
+vector_field_2$vx2 <- with(vector_field_2, Df2_x2(x1, x2))
+
+library(grid)
+arrow_scale <- 1
+ggplot(vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+vx1/arrow_scale, yend = x2+vx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25) +
+  xlim(0,5) +
+  ylim(0,5)
+
+library(graphics)
+
+# Data
+x <- -10:10
+y <- -10:10
+z <- sqrt(100 - outer((x-5) ^ 2, y ^ 2, "+"))
+
+contour(x, y, z, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{3}}} \textbf{Normalise vectors of partial derivatives.}
+
+This is done, and a slope field showing these normalised vectors is shown in Figure 15.
+
+```{r, include=F}
+normal_vector_field_1 <- vector_field_1
+colnames(normal_vector_field_1) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_1$nvx1 <- vector_field_1$vx1 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2)
+normal_vector_field_1$nvx2 <- vector_field_1$vx2 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2) 
+normal_vector_field_1 <- replace(normal_vector_field_1, is.na(normal_vector_field_1), 0)
+```
+
+```{r, include=F}
+normal_vector_field_2 <- vector_field_2
+colnames(normal_vector_field_2) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_2$nvx1 <- vector_field_2$vx1 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2)
+normal_vector_field_2$nvx2 <- vector_field_2$vx2 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2) 
+normal_vector_field_2 <- replace(normal_vector_field_2, is.na(normal_vector_field_2), 0)
+```
+
+```{r, fig.show="hold", out.width="40%", fig.height = 6, echo=F, fig.cap="Normalised slope fields for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - x_1^2 - (x_2-5)^2}$.", warning=F}
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_1, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+```
+
+Steps \textcircled{\raisebox{-0.9pt}{\textbf{4}}}-\textcircled{\raisebox{-0.9pt}{\textbf{6}}} are performed together, and the result of Step \textcircled{\raisebox{-0.9pt}{\textbf{6}}} is discussed in Step \textcircled{\raisebox{-0.9pt}{\textbf{7}}}.
+
+\textcircled{\raisebox{-0.9pt}{\textbf{4}}} \textbf{Compute the dot product and take the absolute values.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{5}}} \textbf{Repeat the process over the entire parameter space.}
+
+```{r, include=F}
+abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{6}}} \textbf{Sum all together and divide by the number of discrete points.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{7}}} \textbf{Check how close this number is to 1.}
+
+```{r, include=F}
+measure_3 <- sum(abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)) /
+  length(vector_field_1$x1)
+```
+
+For functions $h(x_1, x_2)$ and $f(x_1, x_2)$, whose contours plots are reprinted in Figure 16 below, we get a number of \textbf{`r round(measure_3,2)`}.
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Contour plots for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - x_1^2 - (x_2-5)^2}$.", warning=F}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+
+# Data
+z_g <- sqrt(100 - outer(x ^ 2, (y-5) ^ 2, "+"))
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+\newpage
+
+#### Third try
+
+\textbf{}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{2}}} \textbf{Repeat Step 1 for the second response surface.}
+
+$f(x_1, x_2)$ now takes the form:
+
+$$
+f(x_1, x_2) = \sqrt{100 - (x_1-5)^2 - (x_2-5)^2}
+$$
+
+```{r, include=F}
+Df2_x1 <- function(x1, x2){
+  (1/2)*(100 - (x1-5)^2 - (x2-5)^2)^(-1/2) * (-2*(x1-5))
+}
+Df2_x2 <- function(x1, x2){
+  (1/2)*(100 - (x1-5)^2 - (x2-5)^2)^(-1/2) * (-2*(x2-5))
+}
+```
+
+which has partial derivatives, with slope field and contour plot shown in Figure 17:
+
+$$
+\begin{aligned}
+\frac{\partial f(x_1, x_2)}{\partial x_1} &=
+-\frac{x_1-5}{\sqrt{100 - (x_1-5)^2 - (x_2-5)^2}} \\
+\frac{\partial f(x_1, x_2)}{\partial x_2} &=
+-\frac{x_2-5}{\sqrt{100 - (x_1-5)^2 - (x_2-5)^2}}
+\end{aligned}
+$$
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Slope field and contour plot for the function $f(x_1, x_2) = \\sqrt{100 - (x_1-5)^2 - (x_2-5)^2}$.", warning=F}
+f2 <- expression(
+  (100 - x1^2 - x2^2)^(1/2)
+)
+# D(f1, "x1")
+# D(f1, "x2")
+
+vector_field_2 <- expand.grid(x1=seq(0, 5, 1), x2=seq(0, 5, 1))
+vector_field_2$vx1 <- with(vector_field_2, Df2_x1(x1, x2))
+vector_field_2$vx2 <- with(vector_field_2, Df2_x2(x1, x2))
+
+library(grid)
+arrow_scale <- 1
+ggplot(vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+vx1/arrow_scale, yend = x2+vx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25) +
+  xlim(0,5) +
+  ylim(0,5)
+
+library(graphics)
+
+# Data
+x <- -10:10
+y <- -10:10
+z <- sqrt(100 - outer((x-5) ^ 2, (y-5) ^ 2, "+"))
+
+contour(x, y, z, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{3}}} \textbf{Normalise vectors of partial derivatives.}
+
+This is done, and a slope field showing these normalised vectors is shown in Figure 18.
+
+```{r, include=F}
+normal_vector_field_1 <- vector_field_1
+colnames(normal_vector_field_1) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_1$nvx1 <- vector_field_1$vx1 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2)
+normal_vector_field_1$nvx2 <- vector_field_1$vx2 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2) 
+normal_vector_field_1 <- replace(normal_vector_field_1, is.na(normal_vector_field_1), 0)
+```
+
+```{r, include=F}
+normal_vector_field_2 <- vector_field_2
+colnames(normal_vector_field_2) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_2$nvx1 <- vector_field_2$vx1 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2)
+normal_vector_field_2$nvx2 <- vector_field_2$vx2 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2) 
+normal_vector_field_2 <- replace(normal_vector_field_2, is.na(normal_vector_field_2), 0)
+```
+
+```{r, fig.show="hold", out.width="40%", fig.height = 6, echo=F, fig.cap="Normalised slope fields for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - (x_1-5)^2 - (x_2-5)^2}$.", warning=F}
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_1, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+```
+
+Steps \textcircled{\raisebox{-0.9pt}{\textbf{4}}}-\textcircled{\raisebox{-0.9pt}{\textbf{6}}} are performed together, and the result of Step \textcircled{\raisebox{-0.9pt}{\textbf{6}}} is discussed in Step \textcircled{\raisebox{-0.9pt}{\textbf{7}}}.
+
+\textcircled{\raisebox{-0.9pt}{\textbf{4}}} \textbf{Compute the dot product and take the absolute values.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{5}}} \textbf{Repeat the process over the entire parameter space.}
+
+```{r, include=F}
+abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{6}}} \textbf{Sum all together and divide by the number of discrete points.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{7}}} \textbf{Check how close this number is to 1.}
+
+```{r, include=F}
+measure_4 <- sum(abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)) /
+  length(vector_field_1$x1)
+```
+
+For functions $h(x_1, x_2)$ and $f(x_1, x_2)$, whose contours plots are reprinted in Figure 19 below, we get a number of \textbf{`r round(measure_4,2)`}.
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Contour plots for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - (x_1-5)^2 - (x_2-5)^2}$.", warning=F}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+
+# Data
+z_g <- sqrt(100 - outer((x-5) ^ 2, (y-5) ^ 2, "+"))
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+\newpage
+
+#### Fourth try
+
+\textbf{}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{2}}} \textbf{Repeat Step 1 for the second response surface.}
+
+$f(x_1, x_2)$ now takes the form:
+
+$$
+f(x_1, x_2) = \sqrt{100 - (x_1-2.5)^2 - (x_2-2.5)^2}
+$$
+
+```{r, include=F}
+Df2_x1 <- function(x1, x2){
+  (1/2)*(100 - (x1-2.5)^2 - (x2-2.5)^2)^(-1/2) * (-2*(x1-2.5))
+}
+Df2_x2 <- function(x1, x2){
+  (1/2)*(100 - (x1-2.5)^2 - (x2-2.5)^2)^(-1/2) * (-2*(x2-2.5))
+}
+```
+
+which has partial derivatives, with slope field and contour plot shown in Figure 17:
+
+$$
+\begin{aligned}
+\frac{\partial f(x_1, x_2)}{\partial x_1} &=
+-\frac{x_1-2.5}{\sqrt{100 - (x_1-2.5)^2 - (x_2-2.5)^2}} \\
+\frac{\partial f(x_1, x_2)}{\partial x_2} &=
+-\frac{x_2-2.5}{\sqrt{100 - (x_1-2.5)^2 - (x_2-2.5)^2}}
+\end{aligned}
+$$
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Slope field and contour plot for the function $f(x_1, x_2) = \\sqrt{100 - (x_1-2.5)^2 - (x_2-2.5)^2}$.", warning=F}
+f2 <- expression(
+  (100 - x1^2 - x2^2)^(1/2)
+)
+# D(f1, "x1")
+# D(f1, "x2")
+
+vector_field_2 <- expand.grid(x1=seq(0, 5, 1), x2=seq(0, 5, 1))
+vector_field_2$vx1 <- with(vector_field_2, Df2_x1(x1, x2))
+vector_field_2$vx2 <- with(vector_field_2, Df2_x2(x1, x2))
+
+library(grid)
+arrow_scale <- 1
+ggplot(vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+vx1/arrow_scale, yend = x2+vx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25) +
+  xlim(0,5) +
+  ylim(0,5)
+
+library(graphics)
+
+# Data
+x <- -10:10
+y <- -10:10
+z <- sqrt(100 - outer((x-2.5) ^ 2, (y-2.5) ^ 2, "+"))
+
+contour(x, y, z, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{3}}} \textbf{Normalise vectors of partial derivatives.}
+
+This is done, and a slope field showing these normalised vectors is shown in Figure 18.
+
+```{r, include=F}
+normal_vector_field_1 <- vector_field_1
+colnames(normal_vector_field_1) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_1$nvx1 <- vector_field_1$vx1 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2)
+normal_vector_field_1$nvx2 <- vector_field_1$vx2 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2) 
+normal_vector_field_1 <- replace(normal_vector_field_1, is.na(normal_vector_field_1), 0)
+```
+
+```{r, include=F}
+normal_vector_field_2 <- vector_field_2
+colnames(normal_vector_field_2) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_2$nvx1 <- vector_field_2$vx1 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2)
+normal_vector_field_2$nvx2 <- vector_field_2$vx2 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2) 
+normal_vector_field_2 <- replace(normal_vector_field_2, is.na(normal_vector_field_2), 0)
+```
+
+```{r, fig.show="hold", out.width="40%", fig.height = 6, echo=F, fig.cap="Normalised slope fields for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - (x_1-2.5)^2 - (x_2-2.5)^2}$.", warning=F}
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_1, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+```
+
+Steps \textcircled{\raisebox{-0.9pt}{\textbf{4}}}-\textcircled{\raisebox{-0.9pt}{\textbf{6}}} are performed together, and the result of Step \textcircled{\raisebox{-0.9pt}{\textbf{6}}} is discussed in Step \textcircled{\raisebox{-0.9pt}{\textbf{7}}}.
+
+\textcircled{\raisebox{-0.9pt}{\textbf{4}}} \textbf{Compute the dot product and take the absolute values.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{5}}} \textbf{Repeat the process over the entire parameter space.}
+
+```{r, include=F}
+abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{6}}} \textbf{Sum all together and divide by the number of discrete points.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{7}}} \textbf{Check how close this number is to 1.}
+
+```{r, include=F}
+measure_5 <- sum(abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)) /
+  length(vector_field_1$x1)
+```
+
+For functions $h(x_1, x_2)$ and $f(x_1, x_2)$, whose contours plots are reprinted in Figure 19 below, we get a number of \textbf{`r round(measure_5,2)`}.
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Contour plots for the functions $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$ and $f(x_1, x_2) = \\sqrt{100 - (x_1-2.5)^2 - (x_2-2.5)^2}$.", warning=F}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+
+# Data
+z_g <- sqrt(100 - outer((x-2.5) ^ 2, (y-2.5) ^ 2, "+"))
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+### Summary
+
+On the next page, side-by-side contour plots for each pair of $h(x_1, x_2)$ and $f(x_1, x_2)$ from Sections 3.1 and 3.2 are presented, along with their value of the alignment measure.
+
+\newpage
+
+```{r alignment-measure-097, fig.show="hold", out.width="27%", fig.height = 6.9, echo=F, fig.cap=paste("Alignment measure of ", round(measure_1,2),".", sep=""), warning=F, fig.align='center'}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1.5, xlab="x1", ylab="x2")
+
+# Data
+z_g <- sqrt(100 - outer(x ^ 2, y ^ 2, "+")) + 5 - 5
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1.5, xlab="x1", ylab="x2")
+```
+
+```{r alignment-measure-048-1, fig.show="hold", out.width="27%", fig.height = 6.9, echo=F, fig.cap=paste("Alignment measure of ", round(measure_2,2),".", sep=""), warning=F, fig.align='center'}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1.5, xlab="x1", ylab="x2")
+
+# Data
+z_g <- sqrt(100 - outer((x-5) ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1.5, xlab="x1", ylab="x2")
+```
+
+```{r, fig.show="hold", out.width="27%", fig.height = 6.9, echo=F, fig.cap=paste("Alignment measure of ", round(measure_3,2),".", sep=""), warning=F, fig.align='center'}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1.5, xlab="x1", ylab="x2")
+
+# Data
+z_g <- sqrt(100 - outer(x ^ 2, (y-5) ^ 2, "+"))
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1.5, xlab="x1", ylab="x2")
+```
+
+```{r alignment-measure-056, fig.show="hold", out.width="27%", fig.height = 6.9, echo=F, fig.cap=paste("Alignment measure of ", round(measure_4,2),".", sep=""), warning=F, fig.align='center'}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1.5, xlab="x1", ylab="x2")
+
+# Data
+z_g <- sqrt(100 - outer((x-5) ^ 2, (y-5) ^ 2, "+"))
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1.5, xlab="x1", ylab="x2")
+```
+
+```{r alignment-measure-062, fig.show="hold", out.width="27%", fig.height = 6.9, echo=F, fig.cap=paste("Alignment measure of ", round(measure_5,2),".", sep=""), warning=F, fig.align='center'}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- sqrt(100 - outer(x ^ 2, y ^ 2, "+"))
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1.5, xlab="x1", ylab="x2")
+
+# Data
+z_g <- sqrt(100 - outer((x-2.5) ^ 2, (y-2.5) ^ 2, "+"))
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1.5, xlab="x1", ylab="x2")
+```
+
+\newpage 
+
+## $f$ is an inclined plane
+
+\textcircled{\raisebox{-0.9pt}{\textbf{1}}} \textbf{Computation of partial derivatives w.r.t. the parameters used the test the case.}
+
+The function against which the others will be compared is:
+
+$$
+h(x_1, x_2) = x_1 + x_2
+$$
+
+which has partial derivatives, with slope field and contour plot shown in Figure 24:
+
+$$
+\begin{aligned}
+\frac{\partial h(x_1, x_2)}{\partial x_1} &=
+1 \\
+\frac{\partial h(x_1, x_2)}{\partial x_2} &=
+1
+\end{aligned}
+$$
+
+```{r, include=F}
+Df1_x1 <- function(x1, x2){
+  1
+}
+Df1_x2 <- function(x1, x2){
+  1
+}
+```
+
+```{r flat-plane-sf-and-cp-for-h, fig.show="hold", out.width="50%", fig.height=6.75, echo=F, fig.cap="Slope field and contour plot for the function $h(x_1, x_2) = x_1 + x_2$.", warning=F}
+f1 <- expression(
+  x1 + x2
+)
+# D(f1, "x1")
+# D(f1, "x2")
+
+vector_field_1 <- expand.grid(x1=seq(0, 5, 1), x2=seq(0, 5, 1))
+vector_field_1$vx1 <- with(vector_field_1, Df1_x1(x1, x2))
+vector_field_1$vx2 <- with(vector_field_1, Df1_x2(x1, x2))
+
+library(grid)
+arrow_scale <- 1
+ggplot(vector_field_1, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+vx1/arrow_scale, yend = x2+vx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25) +
+  xlim(0,5) +
+  ylim(0,5) +
+  theme_gray(base_size = 24)
+
+library(graphics)
+
+# Data
+x <- -10:10
+y <- -10:10
+z <- outer(x, y, "+")
+
+contour(x, y, z, xlim = c(0,5), ylim = c(0,5), nlevels = 50, labcex=1, xlab="x1", ylab="x2")
+```
+
+The relative values of the partial derivatives (w.r.t. $x_1$ and $x_2$) at 36 points can be inferred from the slope field in Figure 24.
+
+```{r, include=F, message=F}
+library(dplyr)
+```
+
+```{r, echo=F}
+n_vector_field_1 <- vector_field_1
+for (i in 1:36) {
+  n_vector_field_1$vx1[i] <- vector_field_1$vx1[i] / ((vector_field_1$vx1[i]) + (vector_field_1$vx2[i]))
+}
+for (i in 1:36) {
+  n_vector_field_1$vx2[i] <- vector_field_1$vx2[i] / ((vector_field_1$vx1[i]) + (vector_field_1$vx2[i]))
+}
+```
+
+```{r, include=F}
+n_vector_field_1 <- n_vector_field_1 %>% replace(is.na(.), 0)
+```
+
+The remaining six steps require the selection of another function (which we'll call $f(x_1, x_2)$) to compare to $h(x_1, x_2)$ from Step 1. First we'll look at choices for this second function which offer an acceptable match; initially one which is a perfect match.
+
+\newpage
+
+### Good agreement
+
+#### Exact match
+
+\textbf{}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{2}}} \textbf{Repeat Step 1 for the second response surface.}
+
+Since we're matching $f(x_1, x_2)$ with $h(x_1, x_2)$, we have
+
+$$
+f(x_1, x_2) = x_1 + x_2
+$$
+
+```{r, include=F}
+Df2_x1 <- function(x1, x2){
+  1
+}
+Df2_x2 <- function(x1, x2){
+  1
+}
+```
+
+which has partial derivatives, with slope field and contour plot shown in Figure 25:
+
+$$
+\begin{aligned}
+\frac{\partial f(x_1, x_2)}{\partial x_1} &=
+1 \\
+\frac{\partial f(x_1, x_2)}{\partial x_2} &=
+1
+\end{aligned}
+$$
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Slope field and contour plot for the function $f(x_1, x_2) = x_1 + x_2$.", warning=F}
+f2 <- expression(
+  x1 + x2
+)
+# D(f1, "x1")
+# D(f1, "x2")
+
+vector_field_2 <- expand.grid(x1=seq(0, 5, 1), x2=seq(0, 5, 1))
+vector_field_2$vx1 <- with(vector_field_2, Df2_x1(x1, x2))
+vector_field_2$vx2 <- with(vector_field_2, Df2_x2(x1, x2))
+
+library(grid)
+arrow_scale <- 1
+ggplot(vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+vx1/arrow_scale, yend = x2+vx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25) +
+  xlim(0,5) +
+  ylim(0,5)
+
+library(graphics)
+
+# Data
+x <- -10:10
+y <- -10:10
+z <- outer(x, y, "+")
+
+contour(x, y, z, xlim = c(0,5), ylim = c(0,5), nlevels = 50)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{3}}} \textbf{Normalise vectors of partial derivatives.}
+
+This is done, and a slope field showing these normalised vectors is shown in Figure 26.
+
+```{r, include=F}
+normal_vector_field_1 <- vector_field_1
+colnames(normal_vector_field_1) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_1$nvx1 <- vector_field_1$vx1 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2)
+normal_vector_field_1$nvx2 <- vector_field_1$vx2 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2) 
+normal_vector_field_1 <- replace(normal_vector_field_1, is.na(normal_vector_field_1), 0)
+```
+
+```{r, include=F}
+normal_vector_field_2 <- vector_field_2
+colnames(normal_vector_field_2) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_2$nvx1 <- vector_field_2$vx1 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2)
+normal_vector_field_2$nvx2 <- vector_field_2$vx2 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2) 
+normal_vector_field_2 <- replace(normal_vector_field_2, is.na(normal_vector_field_2), 0)
+```
+
+```{r, fig.show="hold", out.width="40%", fig.height = 6, echo=F, fig.cap="Normalised slope fields for the functions $h(x_1, x_2) = x_1 + x_2$ and $f(x_1, x_2) = x_1 + x_2$.", warning=F}
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_1, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+```
+
+Steps \textcircled{\raisebox{-0.9pt}{\textbf{4}}}-\textcircled{\raisebox{-0.9pt}{\textbf{6}}} are performed together, and the result of Step \textcircled{\raisebox{-0.9pt}{\textbf{6}}} is discussed in Step \textcircled{\raisebox{-0.9pt}{\textbf{7}}}.
+
+\textcircled{\raisebox{-0.9pt}{\textbf{4}}} \textbf{Compute the dot product and take the absolute values.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{5}}} \textbf{Repeat the process over the entire parameter space.}
+
+```{r, include=F}
+abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{6}}} \textbf{Sum all together and divide by the number of discrete points.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{7}}} \textbf{Check how close this number is to 1.}
+
+```{r, include=F}
+measure_6 <- sum(abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)) /
+  length(vector_field_1$x1)
+```
+
+For functions $h(x_1, x_2)$ and $f(x_1, x_2)$, whose contours plots are reprinted in Figure 27 below, we get a number of \textbf{`r round(measure_6,2)`}.
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Contour plots for the functions $h(x_1, x_2) = x_1 + x_2$ and $f(x_1, x_2) = x_1 + x_2$.", warning=F}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- outer(x, y, "+")
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 50)
+
+# Data
+z_g <- outer(x, y, "+") + 5 - 5
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 50)
+```
+
+\newpage
+
+
+#### Also inclined plane, same exact direction, only rising more steeply
+
+\textbf{}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{2}}} \textbf{Repeat Step 1 for the second response surface.}
+
+Since we're matching $f(x_1, x_2)$ with $h(x_1, x_2)$, we have
+
+$$
+f(x_1, x_2) = 2x_1 + 2x_2
+$$
+
+```{r, include=F}
+Df2_x1 <- function(x1, x2){
+  2
+}
+Df2_x2 <- function(x1, x2){
+  2
+}
+```
+
+which has partial derivatives, with slope field and contour plot shown in Figure 28:
+
+$$
+\begin{aligned}
+\frac{\partial f(x_1, x_2)}{\partial x_1} &=
+2 \\
+\frac{\partial f(x_1, x_2)}{\partial x_2} &=
+2
+\end{aligned}
+$$
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Slope field and contour plot for the function $f(x_1, x_2) = 2x_1 + 2x_2$.", warning=F}
+f2 <- expression(
+  2*x1 + 2*x2
+)
+# D(f1, "x1")
+# D(f1, "x2")
+
+vector_field_2 <- expand.grid(x1=seq(0, 5, 1), x2=seq(0, 5, 1))
+vector_field_2$vx1 <- with(vector_field_2, Df2_x1(x1, x2))
+vector_field_2$vx2 <- with(vector_field_2, Df2_x2(x1, x2))
+
+library(grid)
+arrow_scale <- 1
+ggplot(vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+vx1/arrow_scale, yend = x2+vx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25) +
+  xlim(0,5) +
+  ylim(0,5)
+
+library(graphics)
+
+# Data
+x <- -10:10
+y <- -10:10
+z <- outer(2*x, 2*y, "+")
+
+contour(x, y, z, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{3}}} \textbf{Normalise vectors of partial derivatives.}
+
+This is done, and a slope field showing these normalised vectors is shown in Figure 29.
+
+```{r, include=F}
+normal_vector_field_1 <- vector_field_1
+colnames(normal_vector_field_1) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_1$nvx1 <- vector_field_1$vx1 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2)
+normal_vector_field_1$nvx2 <- vector_field_1$vx2 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2) 
+normal_vector_field_1 <- replace(normal_vector_field_1, is.na(normal_vector_field_1), 0)
+```
+
+```{r, include=F}
+normal_vector_field_2 <- vector_field_2
+colnames(normal_vector_field_2) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_2$nvx1 <- vector_field_2$vx1 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2)
+normal_vector_field_2$nvx2 <- vector_field_2$vx2 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2) 
+normal_vector_field_2 <- replace(normal_vector_field_2, is.na(normal_vector_field_2), 0)
+```
+
+```{r, fig.show="hold", out.width="40%", fig.height = 6, echo=F, fig.cap="Normalised slope fields for the functions $h(x_1, x_2) = x_1 + x_2$ and $f(x_1, x_2) = 2x_1 + 2x_2$.", warning=F}
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_1, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+```
+
+Steps \textcircled{\raisebox{-0.9pt}{\textbf{4}}}-\textcircled{\raisebox{-0.9pt}{\textbf{6}}} are performed together, and the result of Step \textcircled{\raisebox{-0.9pt}{\textbf{6}}} is discussed in Step \textcircled{\raisebox{-0.9pt}{\textbf{7}}}.
+
+\textcircled{\raisebox{-0.9pt}{\textbf{4}}} \textbf{Compute the dot product and take the absolute values.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{5}}} \textbf{Repeat the process over the entire parameter space.}
+
+```{r, include=F}
+abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{6}}} \textbf{Sum all together and divide by the number of discrete points.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{7}}} \textbf{Check how close this number is to 1.}
+
+```{r, include=F}
+measure_7 <- sum(abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)) /
+  length(vector_field_1$x1)
+```
+
+For functions $h(x_1, x_2)$ and $f(x_1, x_2)$, whose contours plots are reprinted in Figure 30 below, we get a number of \textbf{`r round(measure_7,2)`}. \textcolor{red}{The measure fails to recognise the difference in gradient of the two (otherwise identical) planes.}
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Contour plots for the functions $h(x_1, x_2) = x_1 + x_2$ and $f(x_1, x_2) = 2x_1 + 2x_2$.", warning=F}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- outer(x, y, "+")
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 50)
+
+# Data
+z_g <- outer(2*x, 2*y, "+")
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100)
+```
+
+\newpage
+
+### Bad agreement
+
+#### First try
+
+\textbf{}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{2}}} \textbf{Repeat Step 1 for the second response surface.}
+
+$f(x_1, x_2)$ now takes the form:
+
+$$
+f(x_1, x_2) = -x_1 + x_2
+$$
+
+```{r, include=F}
+Df2_x1 <- function(x1, x2){
+  -1
+}
+Df2_x2 <- function(x1, x2){
+  1
+}
+```
+
+which has partial derivatives, with slope field and contour plot shown in Figure 28:
+
+$$
+\begin{aligned}
+\frac{\partial f(x_1, x_2)}{\partial x_1} &=
+-1 \\
+\frac{\partial f(x_1, x_2)}{\partial x_2} &=
+1
+\end{aligned}
+$$
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Slope field and contour plot for the function $f(x_1, x_2) = -x_1 + x_2$.", warning=F}
+f2 <- expression(
+  (100 - x1^2 - x2^2)^(1/2)
+)
+# D(f1, "x1")
+# D(f1, "x2")
+
+vector_field_2 <- expand.grid(x1=seq(0, 5, 1), x2=seq(0, 5, 1))
+vector_field_2$vx1 <- with(vector_field_2, Df2_x1(x1, x2))
+vector_field_2$vx2 <- with(vector_field_2, Df2_x2(x1, x2))
+
+library(grid)
+arrow_scale <- 1
+ggplot(vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+vx1/arrow_scale, yend = x2+vx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25) +
+  xlim(0,5) +
+  ylim(0,5)
+
+library(graphics)
+
+# Data
+x <- -10:10
+y <- -10:10
+z <- outer(-x, y, "+")
+
+contour(x, y, z, xlim = c(0,5), ylim = c(0,5), nlevels = 50)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{3}}} \textbf{Normalise vectors of partial derivatives.}
+
+This is done, and a slope field showing these normalised vectors is shown in Figure 29.
+
+```{r, include=F}
+normal_vector_field_1 <- vector_field_1
+colnames(normal_vector_field_1) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_1$nvx1 <- vector_field_1$vx1 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2)
+normal_vector_field_1$nvx2 <- vector_field_1$vx2 / sqrt((vector_field_1$vx1)^2 + (vector_field_1$vx2)^2) 
+normal_vector_field_1 <- replace(normal_vector_field_1, is.na(normal_vector_field_1), 0)
+```
+
+```{r, include=F}
+normal_vector_field_2 <- vector_field_2
+colnames(normal_vector_field_2) <- c("x1", "x2", "nvx1", "nvx2")
+normal_vector_field_2$nvx1 <- vector_field_2$vx1 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2)
+normal_vector_field_2$nvx2 <- vector_field_2$vx2 / sqrt((vector_field_2$vx1)^2 + (vector_field_2$vx2)^2) 
+normal_vector_field_2 <- replace(normal_vector_field_2, is.na(normal_vector_field_2), 0)
+```
+
+```{r, fig.show="hold", out.width="40%", fig.height = 6, echo=F, fig.cap="Normalised slope fields for the functions $h(x_1, x_2) = x_1 + x_2$ and $f(x_1, x_2) = -x_1 + x_2$.", warning=F}
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_1, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+
+library(grid)
+arrow_scale <- 1
+ggplot(normal_vector_field_2, aes(x = x1, y = x2)) +
+  geom_segment(aes(xend = x1+nvx1/arrow_scale, yend = x2+nvx2/arrow_scale),
+               arrow = arrow(length = unit(0.1, "cm")), linewidth = 0.25)
+```
+
+Steps \textcircled{\raisebox{-0.9pt}{\textbf{4}}}-\textcircled{\raisebox{-0.9pt}{\textbf{6}}} are performed together, and the result of Step \textcircled{\raisebox{-0.9pt}{\textbf{6}}} is discussed in Step \textcircled{\raisebox{-0.9pt}{\textbf{7}}}.
+
+\textcircled{\raisebox{-0.9pt}{\textbf{4}}} \textbf{Compute the dot product and take the absolute values.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{5}}} \textbf{Repeat the process over the entire parameter space.}
+
+```{r, include=F}
+abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)
+```
+
+\textcircled{\raisebox{-0.9pt}{\textbf{6}}} \textbf{Sum all together and divide by the number of discrete points.}
+
+\textcircled{\raisebox{-0.9pt}{\textbf{7}}} \textbf{Check how close this number is to 1.}
+
+```{r, include=F}
+measure_8 <- sum(abs(normal_vector_field_1$nvx1 * normal_vector_field_2$nvx1 + normal_vector_field_1$nvx2 * normal_vector_field_2$nvx2)) /
+  length(vector_field_1$x1)
+```
+
+For functions $h(x_1, x_2)$ and $f(x_1, x_2)$, whose contours plots are reprinted in Figure 13 below, we get a number of \textbf{`r round(measure_8,2)`}.
+
+```{r, fig.show="hold", out.width="50%", fig.height = 6.75, echo=F, fig.cap="Contour plots for the functions $h(x_1, x_2) = x_1 + x_2$ and $f(x_1, x_2) = -x_1 + x_2$.", warning=F}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- outer(x, y, "+")
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 50)
+
+# Data
+z_g <- outer(-x, y, "+")
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 50)
+```
+
+### Summary
+
+On the next page, side-by-side contour plots for each pair of $h(x_1, x_2)$ and $f(x_1, x_2)$ from Sections 3.1 and 3.2 are presented, along with their value of the alignment measure.
+
+\newpage
+
+```{r alignment-measure-100-1, fig.show="hold", out.width="27%", fig.height = 6.9, echo=F, fig.cap=paste("Alignment measure of ", round(measure_6,2),".", sep=""), warning=F, fig.align='center'}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- outer(x, y, "+")
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 50, labcex=1.5, xlab="x1", ylab="x2")
+
+# Data
+z_g <- outer(x, y, "+") + 5 - 5
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 50, labcex=1.5, xlab="x1", ylab="x2")
+```
+
+```{r alignment-measure-100-2, fig.show="hold", out.width="27%", fig.height = 6.9, echo=F, fig.cap=paste("Alignment measure of ", round(measure_7,2),".", sep=""), warning=F, fig.align='center'}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- outer(x, y, "+")
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 50, labcex=1.5, xlab="x1", ylab="x2")
+
+# Data
+z_g <- outer(2*x, 2*y, "+")
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 100, labcex=1.5, xlab="x1", ylab="x2")
+```
+
+```{r alignment-measure-000, fig.show="hold", out.width="27%", fig.height = 6.9, echo=F, fig.cap=paste("Alignment measure of ", round(measure_8,2),".", sep=""), warning=F, fig.align='center'}
+# Data
+x <- -10:10
+y <- -10:10
+z_f <- outer(x, y, "+")
+
+contour(x, y, z_f, xlim = c(0,5), ylim = c(0,5), nlevels = 50, labcex=1.5, xlab="x1", ylab="x2")
+
+# Data
+z_g <- outer(-x, y, "+")
+
+contour(x, y, z_g, xlim = c(0,5), ylim = c(0,5), nlevels = 50, labcex=1.5, xlab="x1", ylab="x2")
+```
+
+\newpage
+
+# Citations
