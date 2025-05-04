@@ -165,3 +165,30 @@ very_low_AMs / c
 
 sum(abs(rowSums(partial_derivatives_normalised_response_surface_1_dataframe * partial_derivatives_normalised_response_surface_2_dataframe)) >= 0)
 
+hist(abs(rowSums(partial_derivatives_normalised_response_surface_1_dataframe * partial_derivatives_normalised_response_surface_2_dataframe)))
+
+	
+
+	
+
+for (i in 1:p) {
+
+	
+
+  hist(
+
+	
+
+    abs(partial_derivatives_normalised_response_surface_1_dataframe[,i] *
+
+	
+
+      partial_derivatives_normalised_response_surface_2_dataframe[,i])
+
+	
+
+    )
+
+	
+
+} 
