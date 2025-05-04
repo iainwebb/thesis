@@ -1,0 +1,887 @@
+---
+title: "GPs and their derivatives from scratch"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+urlcolor: blue
+bibliography: references.bib
+link-citations: yes
+linkcolor: blue
+nocite: |
+  
+
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{subfig}
+  - \usepackage{tcolorbox}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \usepackage[font=small,skip=0pt]{caption}
+---
+
+```{r code chunk options, echo=F}
+show_text <- c(FALSE, TRUE) # Leave first as F, second T to show text
+run_but_hidden <- FALSE
+key_code <- TRUE
+not_run <- FALSE
+essential_figures <- c(FALSE, TRUE)
+cache_things <- FALSE
+
+knitr::opts_chunk$set(fig.align="center")
+```
+
+```{r loads in packages, include=run_but_hidden}
+# Load in the required libraries for data manipulation
+# and multivariate normal distribution
+require(MASS)
+require(plyr)
+require(reshape2)
+require(ggplot2)
+library(latex2exp) # displays latex in ggplot labels
+library(english) # converts numbers to words
+library(stringr)
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("Two things are attempted below, each presented in their own section:
+    
+$\\textbf{Section 1:}$", "How to fit a GP to an unknown function.
+
+$\\textbf{Section 2:}$", "How the GP representation of a derivative of an unknown function represented by a GP is related to the GP representation of the function.")
+```
+
+# Fitting a GP in `R`
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("The following demo of Gaussian process regression with R is taken from @keirstead12. He writes: \"Chapter 2 of @rasmussen06 provides a detailed explanation of the math for Gaussian process regression.  It doesn't provide much in the way of code though. This Gist is a brief demo of the basic elements of Gaussian process regression, as described on pages 13 to 16.\"
+    
+We aim to fit a GP process, denoted $h(\\cdot)$ to represent an unknown real-life function $f(\\cdot)$ and later its derivative. The following work assumes a 1D input to the function, denoted $x$, and 1D output, denoted $f$.")
+```
+
+## The GP prior
+
+```{r defines x.star points, include=run_but_hidden}
+# Lower and upper bounds
+expand_quantity <- 3
+x.star_lower_s <- 0
+x.star_upper_s <- 2*pi
+x.star_lower <- x.star_lower_s - expand_quantity
+x.star_upper <- x.star_upper_s + expand_quantity
+
+# Equally spaced points
+x.star_pts_num_s <- 10
+x.star_s <- seq(x.star_lower_s,x.star_upper_s, len=x.star_pts_num_s)
+x.star_pts_num <- 100
+x.star <- seq(x.star_lower,x.star_upper, len=x.star_pts_num)
+X1 <- as.matrix(x.star)
+X2 <- as.matrix(x.star)
+```
+
+```{r creates k(x.star, x.star) covariance matrices, include=run_but_hidden}
+
+sqExpCov1 <- function(X1,X2,l=1) {
+  Sigma <- matrix(rep(0, length(X1)*length(X2)), nrow=length(X1))
+  for (i in 1:nrow(Sigma)) {
+    for (j in 1:ncol(Sigma)) {
+      Sigma[i,j] <- exp(-(sqrt((X1[i]-X2[j])^2)/l)^2/2)
+    }
+  }
+  return(Sigma)
+}
+k.xsxs_s <- sqExpCov1(x.star_s,x.star_s)
+k.xsxs <- sqExpCov1(x.star,x.star)
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("The prior GP will be a $\\textbf{zero-mean}$ Gaussian process with covariance function $k(\\cdot, \\cdot)$ a squared exponential kernel with form $$k(x, x^*) = \\exp\\left(-\\frac{(x-x^*)^2}{2\\Psi^2}\\right),$$ with \\textit{length parameter} $\\Psi = 1$. An example of a covariance matrix with this form, $k(x^*, x^*)$, with $x^*$ a set of", x.star_pts_num_s, "regularly-spaced points on $[0, 2\\pi]$ is:")
+print_mat <- function(mat) {
+  n <- nrow(mat)
+  c('\\begin{bmatrix}',
+    paste0(sapply(seq_len(n - 1),
+                  function(i) paste0(mat[i, ], collapse = ' & ')),
+           ' \\\\'),
+    paste0(mat[n, ], collapse = ' & '),
+    '\\end{bmatrix}')
+}
+cat(
+  writeLines(c('$$',
+             print_mat(
+               round(k.xsxs_s,3)
+             ),
+             '$$'))
+)
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("Using only ", x.star_pts_num_s, " values for $x^*$ would lead to draws from the GP that do not appear to be smooth functions -- see Figure 1.", sep="")
+```
+
+```{r generate some functions from prior (small), include=run_but_hidden}
+n.samples_s <- 3
+# Each column represents a sample from a multivariate normal distribution with zero mean and covariance k.xsxs_s
+prior_draws <- matrix(rep(0,length(x.star_s)*n.samples_s), ncol=n.samples_s)
+for (i in 1:n.samples_s) {
+
+  prior_draws[,i] <- mvrnorm(1, rep(0, length(x.star_s)), k.xsxs_s)
+}
+prior_draws <- cbind(x=x.star_s,as.data.frame(prior_draws))
+prior_draws <- melt(prior_draws,id="x")
+colnames(prior_draws) <- c("x", "draw_number", "f")
+```
+
+```{r plots the prior draws (small x.star), fig.width=5, fig.height=3, fig.cap=caption, echo=essential_figures[1], include=essential_figures[2]}
+# Captions and labels
+caption <- paste(str_to_title(as.english(n.samples_s)), "functions sampled from the GP prior distribution, where $x^*$ is comprised of ", x.star_pts_num_s, "regularly-spaced input values.")
+x_label <- "input, $x$"
+y_label <- "output, $h(x_1, x_2)$"
+
+# Bounds
+y_upper <- max(abs(c(max(prior_draws[,3]), min(prior_draws[,3]))))
+y_lower <- -y_upper
+
+# Plot
+ggplot(prior_draws,aes(x=x,y=f)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf, fill="white") +
+  geom_line(aes(color=draw_number), show.legend = FALSE) +
+  theme_bw() +
+  scale_y_continuous(lim=c(y_lower,y_upper)) +
+  xlab(TeX(x_label)) +
+  ylab(TeX(y_label)) +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("As such the number of elements in $x^*$ will be increased to ", x.star_pts_num, ". Observations will later be simulated for input values within $[0, 2\\pi]$, but in order to see what happens either side of this interval, the elements of $x^*$ will be regularly-spaced over [0 $-$ ", expand_quantity, ", $2\\pi$ $+$ ", expand_quantity, "]. Figure 2 plots some prior draws of sample functions, in order to give an idea of the type of functions a zero-mean GP with squared exponential covariance matrix allows for.", sep="")
+```
+
+```{r generate some functions from prior (large x.star), include=run_but_hidden}
+n.samples_s <- 3
+# Each column represents a sample from a multivariate normal distribution with zero mean and covariance k.xsxs
+prior_draws <- matrix(rep(0,length(x.star)*n.samples_s), ncol=n.samples_s)
+for (i in 1:n.samples_s) {
+
+  prior_draws[,i] <- mvrnorm(1, rep(0, length(x.star)), k.xsxs)
+}
+prior_draws <- cbind(x=x.star,as.data.frame(prior_draws))
+prior_draws <- melt(prior_draws,id="x")
+colnames(prior_draws) <- c("x", "draw_number", "f")
+```
+
+```{r plots the prior draws, fig.width=5, fig.height=3, fig.cap=caption, echo=essential_figures[1], include=essential_figures[2]}
+# Captions and labels
+caption <- paste(str_to_title(as.english(n.samples_s)), "functions sampled from the GP prior distribution, where $x^*$ is comprised of ", x.star_pts_num, "regularly-spaced input values.")
+x_label <- "input, $x$"
+y_label <- "output, $h(x_1, x_2)$"
+
+# Bounds
+y_upper <- max(abs(c(max(prior_draws[,3]), min(prior_draws[,3]))))
+y_lower <- -y_upper
+
+# Plot
+ggplot(prior_draws,aes(x=x,y=f)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf, fill="white") +
+  geom_line(aes(color=draw_number), show.legend = FALSE) +
+  theme_bw() +
+  scale_y_continuous(lim=c(y_lower,y_upper)) +
+  scale_x_continuous(breaks  = c(seq(0, 2*pi, 2*pi)), 
+                    labels = c("0", TeX("$2\\pi$"))) +
+  xlab(TeX(x_label)) +
+  ylab(TeX(y_label))
+```
+
+## The GP posterior
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("To specify the posterior GP distribution, we need three further covariance matrices: $k(x, x)$, $k(x, x^*)$ and $k(x^*, x)$ (recall that $k(\\cdot, \\cdot)$ was described in Section 1.1). If using a GP as an emulator for a deterministic computer model, there will be no observation noise on the training data, since repeating model runs at identical input configurations will return identical outputs. If however the model has a stochastic element to it (as, say, a cloud simulation model would have), then running the model at identical input settings can give slightly different outputs. In the latter case, a $\\text{\\textcolor{BlueGreen}{nugget term}}$ is added to the diagonal of the covaraince matrix $k(x,x)$, meaning that the mean function of the fitted posterior emulator doesn't have to go directly through the training points and can lead to a smoother fit.^[We might still need to add a very small term to the diagonal, even in the case of noise-free observations, but this wouldn't be to represent observation noise, rather to ensure computational stability when inverting the covaraince matrix (why again??).]
+
+Depending on whether we are assuming noise-free observations and/or a zero mean function, our Gaussian process posterior mean (predictive distribution), $\\bar{f}^*$, will take on one of the following forms (Equations (2.19), (2.23), (2.24) and (2.38) in @rasmussen06:
+  \\begin{align*} 
+    \\bar{f}^* = \\hspace{1.4cm} & \\; k(x^*, x)[k(x,x)]^{-1}\\textbf{f} &     \\text{noise-free observations } \\textbf{f} \\text{ and a zero mean function} \\\\
+    & & (1) \\\\
+    \\bar{f}^* = \\hspace{1.4cm} & \\; k(x^*, x)[k(x,x) \\textcolor{BlueGreen}{\\;+\\; \\sigma_n^2 I}]^{-1}\\textbf{y} & \\text{\\textcolor{BlueGreen}{noisy} observations } \\textbf{y} \\text{ and a zero mean function} \\\\
+    & & (2) \\\\
+    \\bar{f}^* = \\textcolor{red}{m(x^*)\\;+} & \\; k(x^*, x)[k(x,x) \\textcolor{BlueGreen}{\\;+\\; \\sigma_n^2 I}]^{-1}\\textcolor{red}{(}\\textbf{y}\\textcolor{red}{\\;-\\;m(x))} & \\text{\\textcolor{BlueGreen}{noisy} observations } \\textbf{y} \\text{ and a \\textcolor{red}{fixed mean }} \\text{function } \\textcolor{red}{m(x)} \\\\
+    & & (3)
+  \\end{align*}
+
+The predictive variance $\\text{cov}({f}^*)$ for the first of these is $$\\text{cov}({f}^*) = k(x^*, x^*) - k(x^*,x)[k(x,x)]^{-1}k(x,x^*)$$ and for the second two $$\\text{cov}({f}^*) = k(x^*, x^*) - k(x^*,x)[k(x,x) \\textcolor{BlueGreen}{\\;+\\; \\sigma_n^2 I}]^{-1}k(x,x^*).$$
+
+We'll look at the situations described in Equations (1) and (2).")
+```
+
+### Noise-free observations, zero mean function
+
+```{r generates noise-free observations, include=run_but_hidden}
+# Number of observations
+n <- 5
+
+# Specify the inputs
+control_inputs <- matrix(seq(0,2*pi,len=n+2), ncol = 1)[2:(n+1),]
+
+# Real-life function
+real_life_process <- function(x){
+  sin(x)
+}
+
+# Observations
+f <- real_life_process(control_inputs)
+f <- as.matrix(f, ncol=1)
+
+nf_data_points <- data.frame(x=control_inputs,
+                y=f)
+colnames(nf_data_points) <- c("control_inputs", "f")
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat(n, "noise-free observations will be simulated by evaluating a function $f(x)$ -- the real-life function, assumed unknown, about which we're interested in learning -- at equally-spaced points in the range $x \\in [0 + 1, 2\\pi - 1]$, with this set of inputs denoted $x$ such that
+    $$
+    \\textbf{f}
+    =
+    \\begin{bmatrix}f(x_1) \\\\ \\vdots \\\\ f(x_5) \\\\ \\end{bmatrix}
+    .
+    $$
+Using $$f(x) = \\sin(x)$$ produces the observations shown in Figure 3.")
+```
+
+```{r plots the noise-free observations, fig.width=5, fig.height=3, fig.cap=caption, echo=essential_figures[1], include=essential_figures[2]}
+
+# Captions and labels
+caption <- paste("The true process, $f(x)$, is indicated with the black dashed line, and ", as.english(n), " observations, $\\textbf{f}$, by the points.")
+x_label <- "input, $x$"
+y_label <- "variable of interest"
+
+# Bounds
+x_upper <- 2*pi + expand_quantity
+x_lower <- 0 - expand_quantity
+
+# Plot the result
+ggplot(nf_data_points, aes(control_inputs, f)) +
+  
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf, fill="white") + 
+  geom_point() +
+  theme_bw() +
+  
+  xlab(TeX(x_label)) +
+  scale_x_continuous(limits = c(x_lower, x_upper), 
+                     breaks  = c(seq(0, 2*pi, 2*pi)), 
+                     labels = c("0", TeX("$2\\pi$"))) +
+
+  scale_y_continuous(lim=c(-2,2), name=TeX(y_label)) +
+
+  geom_function(fun = function(x) sin(x), linetype="dashed")
+  
+```
+
+```{r creates remaining covariance matrices as well as posterior mean and covariance functions and 95% CIs, include=run_but_hidden}
+
+# k(x,x) assuming noise-free observations
+k.xx.no_noise <- sqExpCov1(control_inputs, control_inputs) + diag(0.001, length(control_inputs))
+
+# Other two
+k.xxs <- sqExpCov1(control_inputs, x.star)
+k.xsx <- sqExpCov1(x.star, control_inputs)
+
+# Prior mean function
+h1 <- function(x) {
+  1 + 0*x
+}
+h1(4) # Test
+h1(control_inputs) # Test
+
+h2_1 <- function(x) {
+  1 + 0*x
+}
+h2_2 <- function(x) {
+  0 + 1*x
+}
+
+# Posterior mean function and covariance function
+A <- k.xx.no_noise 
+  # + diag(0.1, length(control_inputs))
+# Constant mean function
+H1 <- matrix(h1(control_inputs), nrow = length(control_inputs))
+beta_hat <- solve(t(H1) %*% solve(A) %*% H1) %*% t(H1) %*% solve(A) %*% f
+# beta_hat <- solve(t(H1) %*% solve(A) %*% H1) %*% t(H1) %*% solve(A) %*% (f + 1)
+# Linear mean function
+H2 <- matrix(c(h2_1(control_inputs), h2_2(control_inputs)), nrow = length(control_inputs), byrow = F)
+beta_hat1 <- solve(t(H2) %*% solve(A) %*% H2) %*% t(H2) %*% solve(A) %*% f
+# beta_hat2 <- solve(t(H2) %*% solve(A) %*% H2) %*% t(H2) %*% solve(A) %*% (f + 1)
+beta_hat1
+# beta_hat2
+
+beta_hat <- beta_hat1
+H <- H2
+  
+f.star.bar.no_noise <- matrix(c(h2_1(x.star), h2_2(x.star)), nrow = length(x.star), byrow = F) %*% beta_hat +  k.xsx %*% solve(k.xx.no_noise) %*% (nf_data_points$f - H %*% beta_hat)
+cov.f.star.no_noise <- 
+  k.xsxs - 
+  k.xsx %*% solve(k.xx.no_noise) %*% k.xxs + 
+  (
+    matrix(c(h2_1(x.star), h2_2(x.star)), nrow = length(x.star), byrow = F) - 
+      k.xsx %*% solve(A) %*% H) %*% 
+  solve(t(H) %*% solve(A) %*% H) %*% 
+  t(
+    matrix(c(h2_1(x.star), h2_2(x.star)), nrow = length(x.star), byrow = F)
+    - k.xsx %*% solve(A) %*% H
+    )
+
+sigma_sq_hat <- (
+  t(nf_data_points$f) %*%
+  (
+    solve(A) -
+      solve(A) %*% H %*% solve(t(H) %*% solve(A) %*% H) %*% t(H) %*% solve(A)
+  ) %*% 
+  nf_data_points$f
+  ) /
+  (5 - 2 - 2)
+  
+
+# 95% CIs
+post_summ.no_noise <- data.frame(
+  x.star, 
+  f.star.bar.no_noise, 
+  f.star.bar.no_noise - qt(0.95,5-2) * as.vector(sqrt(sigma_sq_hat)) * sqrt(diag(cov.f.star.no_noise)), 
+  f.star.bar.no_noise + qt(0.95,5-2) * as.vector(sqrt(sigma_sq_hat)) * sqrt(diag(cov.f.star.no_noise))
+  )
+colnames(post_summ.no_noise) <- c("x.star", "f.star.bar.no_noise", "lower", "upper")
+```
+
+```{r makes noise-free posterior draws, include=run_but_hidden}
+
+# Number of draws
+n.samples_m <- 20
+
+# Make blank matrix
+nf_post_draws <- matrix(rep(0,length(x.star)*n.samples_m), ncol=n.samples_m)
+
+# Generate draw values
+for (i in 1:n.samples_m) {
+  nf_post_draws[,i] <- mvrnorm(1, f.star.bar.no_noise, cov.f.star.no_noise)
+}
+
+# Combine with x.star values
+nf_post_draws <- cbind(x=x.star,as.data.frame(nf_post_draws))
+
+# Stretch into 2000 by 3, with x.star (repeated 20 times) then V1 - V20 then y value
+nf_post_draws <- melt(nf_post_draws,id="x")
+colnames(nf_post_draws) <- c("x", "draw_number", "f")
+
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("Since these are noise-free observations, we want posterior function draws to pass through them. We achieve this by not adding a noise term to the diagonal of the matrix $k(x, x)$. We'll generate and plot", n.samples_m, "functions from the posterior distribution, along with the mean function and 95% confidence interval (Figure 4). Outside of the interval on which we have data, the mean function returns towards zero.
+")
+```
+
+```{r plots the noise-free posterior draws, fig.width=5, fig.height=3.5, fig.cap=caption, echo=essential_figures[1], include=essential_figures[2]}
+
+# Captions and labels
+caption <- paste("The posterior mean function (thick black solid line) along with", n.samples_m, "functions sampled from the posterior (grey) and 95% confidence intervals (thin black solid lines). The underlying real-life function is again a dashed black line. The line $f=0$ is shown in blue -- since we're using a zero mean prior, the posterior mean function can be shown to tend back to this line outside of the interval on which the data lie.")
+x_label <- "input, $x$"
+y_label <- "output, $h(x_1, x_2)$"
+
+# Bounds
+y_upper <- max(abs(c(max(post_summ.no_noise[,2:4]), min(post_summ.no_noise[,2:4]), max(nf_post_draws[,3]), min(nf_post_draws[,3]))))
+y_lower <- -y_upper
+
+ggplot(nf_post_draws,aes(x=x,y=f)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf, fill="white") +
+  geom_line(aes(group=draw_number), colour="grey80", linewidth=0.25) + 
+  geom_line(data=post_summ.no_noise, aes(x=x.star,y=f.star.bar.no_noise),colour="black", linewidth=0.5) +
+  geom_point(data=nf_data_points,aes(x=control_inputs,y=f)) +
+  geom_line(data=post_summ.no_noise,aes(x=x.star,y=lower), colour="black", linewidth=0.25) +
+  geom_line(data=post_summ.no_noise,aes(x=x.star,y=upper), colour="black", linewidth=0.25) +
+  theme_bw() +
+  scale_y_continuous(lim=c(y_lower,y_upper), name=TeX(y_label)) +
+  xlab(TeX(x_label)) +
+  geom_function(fun = function(x) sin(x), colour="black", linetype="dashed") +
+  scale_x_continuous(breaks  = c(seq(0, 2*pi, 2*pi)), 
+                    labels = c("0", TeX("$2\\pi$"))) +
+  geom_hline(yintercept=0, linewidth=0.25, colour="blue")
+
+```
+
+```{r}
+# ------------
+# a 1D example
+# ------------
+
+library(DiceKriging)
+
+# Number of observations
+n <- 5
+
+# Specify the inputs
+control_inputs <- matrix(seq(0,2*pi,len=n+2), ncol = 1)[2:(n+1),]
+
+# Real-life function
+real_life_process <- function(x){
+  sin(x)
+}
+
+# Observations
+f <- real_life_process(control_inputs)
+f <- as.matrix(f, ncol=1)
+
+nf_data_points <- data.frame(x=control_inputs,
+                             y=f)
+colnames(nf_data_points) <- c("control_inputs", "f")
+
+
+x <- control_inputs
+y <- real_life_process(control_inputs)
+
+formula <- y~0
+
+theta <- 1
+# sigma <- 1 
+trend <- c(beta_hat1[1],beta_hat1[2])
+
+model1 <- km(~x, design=data.frame(x=x), response=data.frame(y=y), 
+            covtype="gauss"
+            # , coef.trend=trend
+            # , coef.cov=theta 
+            # , coef.var=sigma^2
+            )
+# model1
+
+# model2 <- km(formula=formula, design=data.frame(x=x), response=data.frame(y=y),
+#             covtype="gauss")
+# 
+# model2
+
+model <- model1
+
+# Bounds
+expand_quantity <- 3
+x_upper <- 2*pi + expand_quantity
+x_lower <- 0 - expand_quantity
+
+tmin <- x_lower; tmax <- x_upper
+t <- seq(from=tmin, to=tmax, by=0.005)
+color <- list(SK="black", UK="blue")
+
+# Results with Universal Kriging formulae (mean and 95% intervals)
+p.UK <- predict(model, newdata=data.frame(x=t), type="SK")
+plot(t, p.UK$mean, type="l", ylim=c(min(p.UK$lower95),max(p.UK$upper95)),
+     xlab="x", ylab="y")
+lines(t, p.UK$trend, col="violet", lty=2)
+lines(t, p.UK$lower95, col=color$UK, lty=2)
+lines(t, p.UK$upper95, col=color$UK, lty=2)
+points(x, y, col="red", pch=19)
+abline(h=0)
+lines(x.star, f.star.bar.no_noise, col="red", lty=2)
+lines(x.star, post_summ.no_noise$lower, col="green", lty=2)
+lines(x.star, post_summ.no_noise$upper, col="green", lty=2)
+
+```
+
+
+### Noisy observations, zero mean function
+
+```{r generates noisy observations, include=run_but_hidden}
+
+# Observation errors
+var_meas_err <- 0.01
+obs_errors <- matrix(rnorm(n,0,sd = sqrt(var_meas_err)), ncol=1)
+
+# Observations
+y <- as.matrix(f, ncol=1) + obs_errors
+
+noisy_data_points <- data.frame(x=control_inputs,
+                y=y)
+colnames(noisy_data_points) <- c("control_inputs", "y")
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat(n, "observations will be simulated by evaluating a function $f(x)$ -- the real-life function, assumed unknown, about which we're interested in learning -- at equally-spaced points in the range $x \\in [0 + 1, 2\\pi - 1]$, with this set of inputs denoted $x$, and then adding on an observation error, randomly sampled from N$(0, 0.1^2)$, such that
+    $$
+    \\textbf{y}
+    =
+    \\begin{bmatrix}f(x_1) + \\epsilon_1 \\\\ \\vdots \\\\ f(x_5) + \\epsilon_5 \\\\ \\end{bmatrix}
+    .
+    $$
+The function $$f(x) = \\sin(x)$$ is used again, and produces the observations shown in Figure 5. Note that addition of the observation error means the points tend not to sit exactly on the curve of the real-life function (dotted line).")
+```
+
+```{r plots the noisy observations, fig.width=5, fig.height=3, fig.cap=caption, echo=essential_figures[1], include=essential_figures[2]}
+
+# Captions and labels
+caption <- paste("The true process, $f(x)$, is indicated with the black dashed line, and ", as.english(n), " observations, $\\textbf{y}$, by the points.")
+x_label <- "input, $x$"
+y_label <- "variable of interest"
+
+# Bounds
+x_upper <- 2*pi + expand_quantity
+x_lower <- 0 - expand_quantity
+
+# Plot the result
+ggplot(noisy_data_points, aes(control_inputs, y)) +
+  
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf, fill="white") + 
+  geom_point() +
+  theme_bw() +
+  
+  xlab(TeX(x_label)) +
+  scale_x_continuous(limits = c(x_lower, x_upper), 
+                     breaks  = c(seq(0, 2*pi, 2*pi)), 
+                     labels = c("0", TeX("$2\\pi$"))) +
+
+  scale_y_continuous(lim=c(-2,2), name=TeX(y_label)) +
+
+  geom_function(fun = function(x) sin(x), linetype="dashed")
+  
+```
+
+```{r specifies observation noise, include=run_but_hidden}
+obs_noise <- 0.01
+```
+
+```{r re-creates k(x,x) for noisy data as well as posterior mean and covariance functions and 95% CIs, include=run_but_hidden}
+
+# k(x,x) assuming noisy observations
+k.xx.noise <- k.xx.no_noise + obs_noise * diag(1, ncol(k.xx.no_noise))
+
+# Posterior mean function and covariance function
+f.star.bar.noise <- k.xsx%*%solve(k.xx.noise)%*%noisy_data_points$y
+cov.f.star.noise <- k.xsxs - k.xsx%*%solve(k.xx.noise)%*%k.xxs
+
+# 95% CIs
+post_summ.noise <- data.frame(
+  x.star, 
+  f.star.bar.noise, 
+  f.star.bar.noise - 2 * sqrt(diag(cov.f.star.noise)), 
+  f.star.bar.noise + 2 * sqrt(diag(cov.f.star.noise))
+  )
+colnames(post_summ.noise) <- c("x.star", "f.star.bar.noise", "lower", "upper")
+
+```
+
+```{r makes noisy posterior draws, include=run_but_hidden}
+
+# Make blank matrix
+noisy_post_draws <- matrix(rep(0,length(x.star)*n.samples_m), ncol=n.samples_m)
+
+# Generate draw values
+for (i in 1:n.samples_m) {
+  noisy_post_draws[,i] <- mvrnorm(1, f.star.bar.noise, cov.f.star.noise)
+}
+
+# Combine with x.star values
+noisy_post_draws <- cbind(x=x.star,as.data.frame(noisy_post_draws))
+
+# Stretch into 2000 by 3, with x.star (repeated 20 times) then V1 - V20 then y value
+noisy_post_draws <- melt(noisy_post_draws,id="x")
+colnames(noisy_post_draws) <- c("x", "draw_number", "y")
+
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("Since there is observation error, we no longer demand posterior draws to pass through the observed points. This can be achieved by adding a constant term representing observation noise onto the diagonal of the covariance matrix. Recalling that normally distributed measurement errors sampled from N(0, ", var_meas_err,") were added to the simulated values, we'll add ", obs_noise, " to the diagonal of the covariance matrix as observation noise.
+
+Figure 6 replicates Figure 4 to incorporate this added noise. The mean function (thick black solid line) doesn't pass through the data points, and clearly the posterior uncertainty (thin black solid lines) has increased.", sep="")
+```
+
+```{r plots the noisy posterior draws, fig.width=5, fig.height=3.5, fig.cap=caption, echo=essential_figures[1], include=essential_figures[2]}
+
+# Captions and labels
+caption <- paste("The posterior mean function (thick black solid line) along with", n.samples_m, "functions sampled from the posterior (grey) and 95% confidence intervals (thin black solid lines). The underlying real-life function is again a dashed black line. The line $f=0$ is shown in blue -- since we're using a zero mean prior, the posterior mean function can be shown to tend back to this line outside of the interval on which the data lie.")
+x_label <- "input, $x$"
+y_label <- "output, $h(x_1, x_2)$"
+
+# Bounds
+y_upper <- max(abs(c(max(post_summ.noise[,2:4]), min(post_summ.noise[,2:4]), max(noisy_post_draws[,3]), min(noisy_post_draws[,3]))))
+y_lower <- -y_upper
+
+ggplot(noisy_post_draws,aes(x=x,y=y)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf, fill="white") +
+  geom_line(aes(group=draw_number), colour="grey80", linewidth=0.25) + 
+  geom_line(data=post_summ.noise, aes(x=x.star,y=f.star.bar.noise),colour="black", linewidth=0.5) +
+  geom_point(data=noisy_data_points,aes(x=control_inputs,y=y)) +
+  geom_line(data=post_summ.noise,aes(x=x.star,y=lower), colour="black", linewidth=0.25) +
+  geom_line(data=post_summ.noise,aes(x=x.star,y=upper), colour="black", linewidth=0.25) +
+  theme_bw() +
+  scale_y_continuous(lim=c(y_lower,y_upper), name=TeX(y_label)) +
+  xlab(TeX(x_label)) +
+  geom_function(fun = function(x) sin(x), colour="black", linetype="dashed") +
+  scale_x_continuous(breaks  = c(seq(0, 2*pi, 2*pi)), 
+                    labels = c("0", TeX("$2\\pi$"))) +
+  geom_hline(yintercept=0, linewidth=0.25, colour="blue")
+
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("Figure 7 compares Figures 4 and 6 side-by-side. The 95% confidence intervals have clearly changed, especially in the range in which the data lie. The mean function has changed too (see Equations (1) and (2) in Section (1.2)).")
+```
+
+```{r, compares the posterior draw plots, fig.show="hold", out.width="49%", fig.width=5, fig.height=3.5, fig.cap=caption, echo=essential_figures[1], include=essential_figures[2]}
+
+# Captions and labels
+caption <- paste("The posterior mean function (thick black solid line) along with", n.samples_m, "functions sampled from the posterior (grey) and 95% confidence intervals (thin black solid lines). The underlying real-life function is again a dashed black line. The line $f=0$ is shown in blue -- since we're using a zero mean prior, the posterior mean function can be shown to tend back to this line outside of the interval on which the data lie. In the left hand plot the observations are noise-free and in the right they are not.")
+x_label <- "input, $x$"
+y_label <- "output, $h(x_1, x_2)$"
+
+# Bounds
+y_upper <- max(abs(c(max(post_summ.no_noise[,2:4]), min(post_summ.no_noise[,2:4]), max(nf_post_draws[,3]), min(nf_post_draws[,3]), max(post_summ.no_noise[,2:4]), min(post_summ.no_noise[,2:4]), max(nf_post_draws[,3]), min(nf_post_draws[,3]))))
+y_lower <- -y_upper
+
+ggplot(nf_post_draws,aes(x=x,y=f)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf, fill="white") +
+  geom_line(aes(group=draw_number), colour="grey80", linewidth=0.25) + 
+  geom_line(data=post_summ.no_noise, aes(x=x.star,y=f.star.bar.no_noise),colour="black", linewidth=0.5) +
+  geom_point(data=nf_data_points,aes(x=control_inputs,y=f)) +
+  geom_line(data=post_summ.no_noise,aes(x=x.star,y=lower), colour="black", linewidth=0.25) +
+  geom_line(data=post_summ.no_noise,aes(x=x.star,y=upper), colour="black", linewidth=0.25) +
+  theme_bw() +
+  scale_y_continuous(lim=c(y_lower,y_upper), name=TeX(y_label)) +
+  xlab(TeX(x_label)) +
+  geom_function(fun = function(x) sin(x), colour="black", linetype="dashed") +
+  scale_x_continuous(breaks  = c(seq(0, 2*pi, 2*pi)), 
+                    labels = c("0", TeX("$2\\pi$"))) +
+  geom_hline(yintercept=0, linewidth=0.25, colour="blue")
+
+ggplot(noisy_post_draws,aes(x=x,y=y)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf, fill="white") +
+  geom_line(aes(group=draw_number), colour="grey80", linewidth=0.25) + 
+  geom_line(data=post_summ.noise, aes(x=x.star,y=f.star.bar.noise),colour="black", linewidth=0.5) +
+  geom_point(data=noisy_data_points,aes(x=control_inputs,y=y)) +
+  geom_line(data=post_summ.noise,aes(x=x.star,y=lower), colour="black", linewidth=0.25) +
+  geom_line(data=post_summ.noise,aes(x=x.star,y=upper), colour="black", linewidth=0.25) +
+  theme_bw() +
+  scale_y_continuous(lim=c(y_lower,y_upper), name=TeX(y_label)) +
+  xlab(TeX(x_label)) +
+  geom_function(fun = function(x) sin(x), colour="black", linetype="dashed") +
+  scale_x_continuous(breaks  = c(seq(0, 2*pi, 2*pi)), 
+                    labels = c("0", TeX("$2\\pi$"))) +
+  geom_hline(yintercept=0, linewidth=0.25, colour="blue")
+```
+
+\newpage
+
+# The GP representation of a derivative of an unknown function that is represented by a GP
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("Having fitted a GP to the data, and obtained a posterior mean function (or rather two) that lies close to the real-life underlying function, we turn our attention to the GP representation of a derivative of an unknown function that is represented by a GP. The GP posterior for noise-free observations, described in Section (1.2.2) will be used. 
+
+To obtain the derivative of the posterior mean function, we first need an expression for the posterior mean function. Viewing the posterior mean function, $\\bar{f}(x^*)$, as a linear combination of", n, "kernel functions, each centered at one of the", n, "training points, Equation (2.27) in @rasmussen06, states that, for any particular input value $x^*$,
+\\begin{equation}
+\\bar{f}(x^*) =  \\sum_{i=1}^{5} \\alpha_i k(x_i, x^*)
+\\end{equation}
+
+where $\\pmb{\\alpha} = (k(x,x) +$", obs_noise,"$I_5) ^{-1} \\mathbf{y}.$ As such, the posterior mean function here will be
+\\begin{align}
+\\bar{f}(x^*) &=
+\\alpha_1 \\exp\\left(-\\frac{1}{2}\\left(\\frac{x_1-x^*}{l}\\right)^2\\right) +
+\\alpha_2 \\exp\\left(-\\frac{1}{2}\\left(\\frac{x_2-x^*}{l}\\right)^2\\right) \\nonumber \\\\
+&\\hspace{0.75cm}
++ \\alpha_3 \\exp\\left(-\\frac{1}{2}\\left(\\frac{x_3-x^*}{l}\\right)^2\\right) + 
+\\alpha_4 \\exp\\left(-\\frac{1}{2}\\left(\\frac{x_4-x^*}{l}\\right)^2\\right) +
+\\alpha_5 \\exp\\left(-\\frac{1}{2}\\left(\\frac{x_5-x^*}{l}\\right)^2\\right),
+\\end{align}
+which is plotted as the solid black line in Figure 8.
+")
+```
+
+```{r defines alpha and calculates mean function, include=run_but_hidden}
+
+# alpha
+alpha <- solve(k.xx.noise) %*% noisy_data_points$y
+
+# mean function
+alpha1 <- alpha[1]
+alpha2 <- alpha[2]
+alpha3 <- alpha[3]
+alpha4 <- alpha[4]
+alpha5 <- alpha[5]
+ci1 <- control_inputs[1]
+ci2 <- control_inputs[2]
+ci3 <- control_inputs[3]
+ci4 <- control_inputs[4]
+ci5 <- control_inputs[5]
+mf <- expression(
+  alpha1 * exp(-0.5*((ci1-x)/l)^2) +
+    alpha2 * exp(-0.5*((ci2-x)/l)^2) +
+    alpha3 * exp(-0.5*((ci3-x)/l)^2) +
+    alpha4 * exp(-0.5*((ci4-x)/l)^2) +
+    alpha5 * exp(-0.5*((ci5-x)/l)^2))
+D(mf, 'x')
+
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+
+From @ohagan92, the derivatives of functions modelled by a Gaussian process with
+\\begin{align*}
+E\\left\\{\\eta(x)\\right\\} &= \\mathbf{h}^T(x)\\pmb{\\beta} \\\\
+Cov\\left\\{\\eta(x), \\eta(\\mathbf{x'})\\right\\} &= k(x,x)
+\\end{align*}
+
+can also be modelled by a Gaussian process, with
+\\begin{align}
+E\\left\\{\\frac{\\partial}{\\partial x}\\eta(x)\\right\\} &= \\frac{\\partial}{\\partial x}\\mathbf{h}^T(x)\\pmb{\\beta} \\\\
+Cov\\left\\{\\frac{\\partial}{\\partial x}\\eta(x), \\frac{\\partial}{\\partial x}\\eta(x')\\right\\} &= \\frac{\\partial^2}{\\partial x \\partial x'}k(x,x'). \\nonumber
+\\end{align}
+
+Led by Equation (2), differentiating the posterior mean function in Equation (1) gives
+\\begin{align*}
+\\frac{\\partial}{\\partial x^*}\\bar{f}(x^*) &= \\frac{1}{l^2} \\left[
+\\alpha_1 (x_1 - x^*) \\exp\\left(-\\frac{1}{2} \\left(\\frac{x_1 - x^*}{l}\\right)^2\\right) +
+\\dots +
+\\alpha_5 (x_5 - x^*) \\exp\\left(-\\frac{1}{2} \\left(\\frac{x_5 - x^*}{l}\\right)^2\\right)
+\\right],
+\\end{align*}
+
+which is also plotted in Figure 6 (solid red line). The real, underlying function $\\sin(x)$, and its derivative $\\cos(x)$ are included in Figure 8 too (black and red dashed lines respectively) for comparison.
+
+")
+```
+
+```{r, plots function and derivative using alpha, fig.show="hold", fig.width=5, fig.height=3, fig.cap=caption, echo=essential_figures[1], include=essential_figures[2]}
+
+# Captions and labels
+caption <- paste("The posterior mean function (black solid line) and the true real-life process function, sin($x$) (black  dashed line). Also shown is the derivative of the posterior mean function (red solid line) and the derivative of the true real-life process function, cos($x$) (red dashed line). Observations are shown as black dots.")
+x_label <- "input, $x$"
+y_label <- "output, $h(x_1, x_2)$"
+
+# Bounds
+x_upper <- 2*pi + expand_quantity
+x_lower <- 0 - expand_quantity
+
+# Specify length parameter
+l <- 1
+
+# Plot the result
+ggplot(noisy_data_points,aes(x=control_inputs,y=y)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-2.25, ymax=2.25, fill="white") +
+  geom_function(fun = function(x) 
+    alpha[1] * exp(-0.5*((control_inputs[1]-x)/l)^2) +
+      alpha[2] * exp(-0.5*((control_inputs[2]-x)/l)^2) +
+      alpha[3] * exp(-0.5*((control_inputs[3]-x)/l)^2) +
+      alpha[4] * exp(-0.5*((control_inputs[4]-x)/l)^2) +
+      alpha[5] * exp(-0.5*((control_inputs[5]-x)/l)^2),
+    colour="black", linewidth=0.8) +
+  geom_function(fun = function(x)
+    alpha1 * (exp(-0.5 * ((ci1 - x)/l)^2) * (0.5 * (2 * (1/l * ((ci1 - x)/l))))) + 
+      alpha2 * (exp(-0.5 * ((ci2 - x)/l)^2) * (0.5 * (2 * (1/l * ((ci2 - x)/l))))) + 
+      alpha3 * (exp(-0.5 * ((ci3 - x)/l)^2) * (0.5 * (2 * (1/l * ((ci3 - x)/l))))) + 
+      alpha4 * (exp(-0.5 * ((ci4 - x)/l)^2) * (0.5 * (2 * (1/l * ((ci4 - x)/l))))) + 
+      alpha5 * (exp(-0.5 * ((ci5 - x)/l)^2) * (0.5 * (2 * (1/l * ((ci5 - x)/l))))),
+    colour="red", linewidth=0.8) +
+  geom_point(data=noisy_data_points,aes(x=control_inputs,y=y)) +
+  theme_bw() +
+  
+  xlab(TeX(x_label)) +
+  scale_x_continuous(limits = c(x_lower, x_upper), 
+                     breaks  = c(seq(0, 2*pi, 2*pi)), 
+                     labels = c("0", TeX("$2\\pi$"))) +
+
+  scale_y_continuous(lim=c(-2,2), name=TeX(y_label)) +
+
+  geom_function(fun = function(x) sin(x), colour="black", linetype="dashed") +
+  geom_function(fun = function(x) cos(x), colour="red", linetype="dashed")
+
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+
+With only five observations, both the posterior mean function of the unknown function and that of the derivative of the unknown function lie close to their true counterparts in the region in which the data lie (and less so outside of this range).
+
+")
+```
+
+\newpage
+
+```{r}
+# -----------------------------
+# Checking parameter estimation
+# -----------------------------
+library(DiceKriging)
+d <- 3 # problem dimension
+n <- 40 # size of the experimental design
+design <- matrix(runif(n*d), n, d)
+covtype <- "matern5_2"
+theta <- c(0.3, 0.5, 1) # the parameters to be found by estimation
+sigma <- 2
+nugget <- NULL # choose a numeric value if you want to estimate nugget
+nugget.estim <- FALSE # choose TRUE if you want to estimate it
+n.simu <- 30 # number of simulations
+sigma2.estimate <- nugget.estimate <- mu.estimate <- matrix(0, n.simu, 1)
+coef.estimate <- matrix(0, n.simu, length(theta))
+model <- km(~1, design=data.frame(design), response=rep(0,n), covtype=covtype,
+coef.trend=0, coef.cov=theta, coef.var=sigma^2, nugget=nugget)
+y <- simulate(model, nsim=n.simu)
+for (i in 1:n.simu) {
+# parameter estimation: tune the optimizer by changing optim.method, control
+model.estimate <- km(~1, design=data.frame(design), response=data.frame(y=y[i,]),
+covtype=covtype, optim.method="BFGS", control=list(pop.size=50, trace=FALSE),
+nugget.estim=nugget.estim)
+# store results
+coef.estimate[i,] <- covparam2vect(model.estimate@covariance)
+sigma2.estimate[i] <- model.estimate@covariance@sd2
+mu.estimate[i] <- model.estimate@trend.coef
+if (nugget.estim) nugget.estimate[i] <- model.estimate@covariance@nugget
+}
+# comparison true values / estimation
+cat("\nResults with ", n, "design points,
+obtained with ", n.simu, "simulations\n\n",
+"Median of covar. coef. estimates: ", apply(coef.estimate, 2, median), "\n",
+"Median of trend coef. estimates: ", median(mu.estimate), "\n",
+"Mean of the var. coef. estimates: ", mean(sigma2.estimate))
+if (nugget.estim) cat("\nMean of the nugget effect estimates: ",
+mean(nugget.estimate))
+# one figure for this specific example - to be adapted
+split.screen(c(2,1)) # split display into two screens
+split.screen(c(1,2), screen = 2) # now split the bottom half into 3
+screen(1)
+boxplot(coef.estimate[,1], coef.estimate[,2], coef.estimate[,3],
+names=c("theta1", "theta2", "theta3"))
+abline(h=theta, col="red")
+fig.title <- paste("Empirical law of the parameter estimates
+(n=", n , ", n.simu=", n.simu, ")", sep="")
+title(fig.title)
+screen(3)
+boxplot(mu.estimate, xlab="mu")
+abline(h=0, col="red")
+screen(4)
+boxplot(sigma2.estimate, xlab="sigma2")
+abline(h=sigma^2, col="red")
+close.screen(all = TRUE)
+
+model
+```
+
+```{r}
+# ------------------------------------------------------------------------
+# A 1D example with known trend and known or unknown covariance parameters
+# ------------------------------------------------------------------------
+x <- c(0, 0.4, 0.6, 0.8, 1);
+y <- c(-0.3, 0, -0.8, 0.5, 0.9)
+theta <- 0.01; sigma <- 3; trend <- c(-1,2)
+model <- km(~x, design=data.frame(x=x), response=data.frame(y=y),
+covtype="matern5_2", coef.trend=trend, coef.cov=theta,
+coef.var=sigma^2)
+model
+# below: if you want to specify trend only, and estimate both theta and sigma:
+model <- km(~x, design=data.frame(x=x), response=data.frame(y=y),
+covtype="matern5_2", coef.trend=trend, lower=0.2)
+model
+# Remark: a lower bound or penalty function is useful here,
+# due to the very small number of design points...
+# kriging with gaussian covariance C(x,y)=sigma^2 * exp(-[(x-y)/theta]^2),
+# and linear trend t(x) = -1 + 2x
+t <- seq(from=0, to=1, by=0.005)
+p <- predict(model, newdata=data.frame(x=t), type="SK")
+# beware that type = "SK" for known parameters (default is "UK")
+plot(t, p$mean, type="l", ylim=c(-7,7), xlab="x", ylab="y")
+lines(t, p$lower95, col="black", lty=2)
+lines(t, p$upper95, col="black", lty=2)
+points(x, y, col="red", pch=19)
+abline(h=0)
+```
+
+
+# Citations
