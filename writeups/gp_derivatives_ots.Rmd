@@ -1,0 +1,552 @@
+---
+title: "GPs and their derivatives using DiceKriging"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+urlcolor: blue
+bibliography: references.bib
+link-citations: yes
+linkcolor: blue
+nocite: |
+  
+
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{subfig}
+  - \usepackage{tcolorbox}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \usepackage[font=small,skip=0pt]{caption}
+---
+
+```{r code chunk options, echo=F}
+show_text <- c(FALSE, TRUE) # Leave first as F, second T to show text
+run_but_hidden <- FALSE
+key_code <- TRUE
+not_run <- FALSE
+essential_figures <- c(FALSE, TRUE)
+cache_things <- FALSE
+regular_box <- "black"
+irregular_box <- "red"
+
+knitr::opts_chunk$set(fig.align="center")
+```
+
+\tcbset{colframe=`r noquote(regular_box)`!25,colback=`r noquote(regular_box)`!10, grow to left by=5mm,left*=0mm, grow to right by=5mm}
+
+```{r loads in packages, include=run_but_hidden}
+# Load in the required libraries for data manipulation
+# and multivariate normal distribution
+require(MASS)
+require(plyr)
+require(reshape2)
+require(ggplot2)
+library(latex2exp) # displays latex in ggplot labels
+library(english) # converts numbers to words
+library(stringr)
+```
+
+# Fundamentals of GPs
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+Let $\\eta(.)$ be a function whose output at a certain input setting is unknown until the function's code is run (a process which takes a long time). We treat $\\eta(.)$ as a random variable, in the sense that it is unknown (rather than it being the result of a random process). We use a GP model for $\\eta(.)$, such that $\\eta(\\textbf{x})$ has a multivariate normal distribution for a particular setting of the $k$ input parameters, $\\textbf{x} = (x_1, \\dots, x_k)$.
+
+We describe our prior beliefs about $\\eta(.)$ using a probability distribution.
+")
+```
+
+## A priori
+
+### The input parameters
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+The $k$ uncertain input parameters, along with their ranges, are identified offline. In order to use a GP, we require the output to vary smoothly over the uncertain parameter space (not chaotically, or with sharp changes) (from Jill).
+")
+```
+
+### The mean function
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+If we have no prior knowledge about $\\eta(.)$, ensuring that a priori $\\text{E}[\\eta(\\textbf{x})] = 0$ for all $\\textbf{x}$ might seem sensible. We are therefore using a **zero mean prior**. If instead we believe that, say, $\\eta(\\textbf{x})$ is approximately linear in $\\textbf{x}$ (or a subset of the input parameters), we might require $$\\text{E}[\\eta(\\textbf{x}) | \\pmb{\\beta}] = \\beta_0 + \\beta_1 \\textbf{x},$$ with $\\pmb{\\beta}^T = (\\beta_0, \\beta_1)$ (and in which case we'd be using a **linear mean prior**) or more generally $$\\text{E}[\\eta(\\textbf{x}) | \\pmb{\\beta}] = \\textbf{h}(\\textbf{x})^{\\text{T}} \\pmb{\\beta},$$ with $\\textbf{h} = (h_0, \\dots, h_{q-1})$ a vector of $q$ known regressor functions, $\\textbf{h}(\\mathbf{x})^T = (h_0(\\mathbf{x)}, \\dots, h_{q-1}(\\mathbf{x}))$, and $\\pmb{\\beta}^T = (\\beta_0, \\dots \\beta_{q-1})$ a vector of $q$ unknown coefficients. Thus
+\\begin{equation}
+\\textbf{h}(\\textbf{x})^{\\text{T}} \\pmb{\\beta} = h_0(\\mathbf{x)}\\beta_0 + \\dots + h_{q-1}(\\mathbf{x})\\beta_{q-1}.
+\\end{equation}
+")
+```
+
+### Forms of $\eta(\cdot)$ to be considered
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+How do we think $\\eta(.)$ will deviate from $\\textbf{h}(\\textbf{x})^{\\text{T}} \\pmb{\\beta}$? What contenders for $\\eta(.)$ are we willing to entertain? Certainly relatively soomth functions, which implies that $\\eta(\\textbf{x})$ and $\\eta(\\textbf{x}^{\\pmb{\\prime}})$ are highly correlated if $\\textbf{x}$ and $\\textbf{x}^{\\pmb{\\prime}}$ are close to each other, with $\\eta(\\textbf{x})$  and $\\eta(\\textbf{x})$ having correlation of 1. Also, we'd like this correlation to decrease for $\\textbf{x}$ and $\\textbf{x}^{\\pmb{\\prime}}$ further and further apart.
+We define the covariance between $\\eta(\\textbf{x})$ and $\\eta(\\textbf{x}^{\\pmb{\\prime}})$ as $$Cov(\\eta(\\textbf{x}), \\eta(\\textbf{x}^{\\pmb{\\prime}}) | \\sigma^2) = \\sigma^2 c(\\textbf{x}, \\textbf{x}^{\\pmb{\\prime}}),$$
+with $\\sigma^2$ unknown and requiring estimation, and $c(\\cdot, \\cdot)$ referred to as a *covariance function*.
+")
+```
+
+\begin{tcolorbox}
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+To explore how a covariance function produces a corresponding covariance matrix, a common covariance function which satisfies the above properties, we look at the \\textbf{squared-exponential}: 
+$$c(\\textbf{x}, \\textbf{x}^{\\pmb{\\prime}}) = \\text{exp}\\{-(\\textbf{x} - \\textbf{x}^{\\pmb{\\prime}})^{\\text{T}} B (\\textbf{x} - \\textbf{x}^{\\pmb{\\prime}})\\}.$$
+Here, $B$ is a $k \\times k$ diagonal matrix of smoothing parameters, such that, for two input settings $\\textbf{x}_1 = (x_{1,1}, \\dots, x_{1,k})$ and $\\textbf{x}_2 = (x_{2,1}, \\dots, x_{2,k})$:
+\\begin{align*}
+c(\\textbf{x}_1, \\textbf{x}_2) 
+&= \\text{exp}\\left\\{-(x_{1,1}, \\dots, x_{1,k})^{\\text{T}}
+\\begin{pmatrix}
+B_1 & 0 & 0 \\\\
+0 & \\ddots & 0 \\\\
+0 & 0 & B_k \\\\
+\\end{pmatrix}
+(x_{2,1}, \\dots, x_{2,k})\\right\\} \\\\
+&= \\text{exp}\\left\\{ - \\left[B_1(x_{1,1} - x_{2,1})^2 + \\dots + B_k(x_{1,k} - x_{2,k})^2 \\right] \\right\\}.
+\\end{align*}
+There is therefore a smoothing parameter for each of the $k$ input parameters, with the $i-$th diagonal element of $B$ describing \`\`how rough $\\eta(.)$ is in the $i-$th dimension of its input\" (Oakley ($\\textcolor{blue}{1999}$)). The matrix $B$ can either be fixed (possibly using some prior knowledge about the smoothness of $\\eta(.)$) or estimated (typically from the posterior mode or using cross validation). The covariance matrix between two sets of ($k$-dimensional) input parameter settings $\\textbf{x} = (\\textbf{x}_1, \\dots, \\textbf{x}_i)$ and $\\textbf{x}^{\\pmb{\\prime}} = (\\textbf{x}_1^{\\pmb{\\prime}}, \\dots, \\textbf{x}_j^{\\pmb{\\prime}})$ is therefore the ($i \\times j$) matrix:
+\\begin{align*}
+c(\\textbf{x}, \\textbf{x}^{\\pmb{\\prime}}) &=
+\\begin{pmatrix}
+c(\\textbf{x}_1, \\textbf{x}_1^{\\pmb{\\prime}}) & \\dots & c(\\textbf{x}_1, \\textbf{x}_j^{\\pmb{\\prime}}) \\\\
+\\vdots & \\ddots & \\vdots \\\\
+c(\\textbf{x}_i, \\textbf{x}_1^{\\pmb{\\prime}}) & \\dots & c(\\textbf{x}_i, \\textbf{x}_j^{\\pmb{\\prime}}) \\\\
+\\end{pmatrix} \\\\
+&=
+\\begin{pmatrix}
+{\\scriptstyle \\text{exp}\\left\\{ - \\left[B_1(x_{1,1} - x_{1,1}^{\\prime})^2 + \\dots + B_k(x_{1,k} - x_{1,k}^{\\prime})^2 \\right] \\right\\} } & \\dots & {\\scriptstyle \\text{exp}\\left\\{ - \\left[B_1(x_{1,1} - x_{j,1}^{\\prime})^2 + \\dots + B_k(x_{1,k} - x_{j,k}^{\\prime})^2 \\right] \\right\\} } \\\\
+\\vdots & \\ddots & \\vdots \\\\
+{\\scriptstyle \\text{exp}\\left\\{ - \\left[B_1(x_{i,1} - x_{1,1}^{\\prime})^2 + \\dots + B_k(x_{i,k} - x_{1,k}^{\\prime})^2 \\right] \\right\\} } & \\dots & {\\scriptstyle \\text{exp}\\left\\{ - \\left[B_1(x_{i,1} - x_{j,1}^{\\prime})^2 + \\dots + B_k(x_{i,k} - x_{j,k}^{\\prime})^2 \\right] \\right\\}} \\\\
+\\end{pmatrix} \\\\
+&=
+\\begin{pmatrix}
+\\text{exp}\\left\\{ - \\sum\\limits_{m=1}^{k} B_m(x_{1,m} - x_{1,m}^{\\prime})^2 \\right\\} & \\dots & \\text{exp}\\left\\{ - \\sum\\limits_{m=1}^{k} B_i(x_{1,m} - x_{j,m}^{\\prime})^2 \\right\\} \\\\
+\\vdots & \\ddots & \\vdots \\\\
+\\text{exp}\\left\\{ - \\sum\\limits_{m=1}^{k} B_m(x_{i,m} - x_{1,m}^{\\prime})^2 \\right\\} & \\dots & \\text{exp}\\left\\{ - \\sum\\limits_{m=1}^{k} B_m(x_{i,m} - x_{j,m}^{\\prime})^2 \\right\\} \\\\
+\\end{pmatrix},
+\\end{align*}
+where typically $B_i = \\dfrac{1}{2\\ell_i^2}$, with $\\ell_i$ referred to as the $i-$th \\textit{length-scale parameter}. Therefore, no matter how many dimensions the input parameter space is (from $k=1$ and up), the covariance matrix for two sets of points within this space is a (two-dimensional) providing pairwise covariances for the two sets. In the case of $k=1$, with $\\textbf{x} = (x_1, \\dots, x_i)$, $\\textbf{x}^{\\pmb{\\prime}} = (x_1^{\\prime}, \\dots, x_j^{\\prime})$, and $B$ a scalar,
+\\begin{align*}
+c(\\textbf{x}, \\textbf{x}^{\\pmb{\\prime}})
+&=
+\\begin{pmatrix}
+c(x_1, x_1^{\\prime}) & \\dots & c(x_1, x_j^{\\prime}) \\\\
+\\vdots & \\ddots & \\vdots \\\\
+c(x_i, x_1^{\\prime}) & \\dots & c(x_i, x_j^{\\prime}) \\\\
+\\end{pmatrix} \\\\
+&=
+\\begin{pmatrix}
+\\text{exp}\\left\\{ - B(x_{1} - x_{1}^{\\prime})^2  \\right\\} & \\dots & \\text{exp}\\left\\{ - B(x_{1} - x_{j}^{\\prime})^2  \\right\\} \\\\
+\\vdots & \\ddots & \\vdots \\\\
+\\text{exp}\\left\\{ - B(x_{i} - x_{1}^{\\prime})^2  \\right\\} & \\dots & \\text{exp}\\left\\{ - B(x_{i} - x_{j}^{\\prime})^2  \\right\\} \\\\
+\\end{pmatrix},
+\\end{align*}
+which, with $B = \\dfrac{1}{2\\ell^2}$, becomes
+\\begin{equation*}
+c(\\textbf{x}, \\textbf{x}^{\\pmb{\\prime}})
+=
+\\begin{pmatrix}
+\\text{exp}\\left\\{ - \\dfrac{(x_{1} - x_{1}^{\\prime})^2}{2\\ell^2}  \\right\\} & \\dots & \\text{exp}\\left\\{ - \\dfrac{(x_{1} - x_{j}^{\\prime})^2}{2\\ell^2}  \\right\\} \\\\
+\\vdots & \\ddots & \\vdots \\\\
+\\text{exp}\\left\\{ - \\dfrac{(x_{i} - x_{1}^{\\prime})^2}{2\\ell^2}  \\right\\} & \\dots & \\text{exp}\\left\\{ - \\dfrac{(x_{i} - x_{j}^{\\prime})^2}{2\\ell^2}  \\right\\} \\\\
+\\end{pmatrix}.
+\\end{equation*}
+")
+```
+\end{tcolorbox}
+
+\begin{tcolorbox}
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+The \\textbf{Matérn covariance function} is another popular choice: 
+$$c(\\textbf{x}, \\textbf{x}^{\\pmb{\\prime}}) = \\dfrac{2^{1-\\nu}}{\\Gamma(\\nu)}\\Bigl( (\\textbf{x} - \\textbf{x}^{\\pmb{\\prime}})^{\\text{T}} B (\\textbf{x} - \\textbf{x}^{\\pmb{\\prime}}) \\Bigr)^{\\nu} K_{\\nu} \\Bigl( (\\textbf{x} - \\textbf{x}^{\\pmb{\\prime}})^{\\text{T}} B (\\textbf{x} - \\textbf{x}^{\\pmb{\\prime}}) \\Bigr),$$
+where typically $B = \\dfrac{\\sqrt{2\\nu}}{\\ell}$, with $\\ell$ again the length-scale parameter and $\\nu$ a positive parameter. Here $K_{\\nu}$ is a *modified Bessel function*. Unlike the infinitely-differentiable squared exponential function, a Matérn covariance function is only $\\lceil \\nu \\rceil - 1$ times differentiable. The parameter $\\nu$, usually specified prior to inference, controls the smoothness of the function. Covariance functions in this family have nice forms when $\\nu = d +  \\frac{1}{2}$ for $d \\in \\mathbb{N}$.
+")
+```
+\end{tcolorbox}
+
+### Distribution of $\eta(\cdot)$
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+A GP model for $\\eta(\\mathbf{x})$ is an infinite collection of random variables such that any $n-$dimensional subset of them having a multivariate normal distribution (@oakley99), such that
+")
+```
+
+\begin{tcolorbox}[colframe=`r noquote(irregular_box)`!25,colback=`r noquote(irregular_box)`!10]
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+\\vspace{-0.2cm}
+$$
+\\eta(.) | \\pmb \\beta, \\sigma^2 \\sim N(m(.), \\sigma^2 c(.,.))
+$$
+\\vspace{-0.6cm}
+")
+```
+\end{tcolorbox}
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+where $m(.)$ and $(c.,.)$ are the choices made in Sections 1.1.2 and 1.1.3 respectively.
+")
+```
+
+### Priors on the parameters
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+For the unknown parameters $\\pmb \\beta$ and $\\sigma^2$, we can either use a weak prior
+\\begin{equation}
+p(\\pmb \\beta, \\sigma^2) \\propto \\sigma^{-2}
+\\end{equation}
+or else incorporate expert knowledge about $\\eta(.)$.
+")
+```
+
+\begin{tcolorbox}
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+From Elster ($\\textcolor{blue}{2015}$), the conjugate prior for the Normal linear regression model is the Normal Inverse Gamma, such that
+\\begin{align}
+\\pmb \\beta | \\sigma^2 \\sim N(\\pmb \\beta_0, \\sigma^2\\mathbf{V}_0), \\\\
+\\sigma^2 \\sim IG(\\alpha_0, \\beta_0).
+\\end{align}
+Using the non-informative prior given in Equation (1) means setting $\\alpha_0 = -\\frac{q}{2}$ and $\\beta_0 = 0$ and letting $\\mathbf{V}_0^{-1} \\rightarrow 0$ in Equations (2) and (3), and, having `observed' $\\eta(.)$ at $n$ design points $\\{\\textbf{x}_1, \\dots, \\textbf{x}_n \\}$, obtaining data $$\\mathbf{y}^T = (y_1 = \\eta(\\mathbf{x}_1), \\dots, y_n = \\eta(\\mathbf{x}_n)),$$ produces marginal posterior distributions (Oakley ($\\textcolor{blue}{1999}$)):
+\\begin{align*}
+\\pmb \\beta | \\sigma^2, \\mathbf{y} &\\sim N((H^T A^{-1}H)^{-1}H^T A^{-1}\\mathbf{y}, \\sigma^2(H^TA^{-1}H)^{-1}), \\\\
+\\sigma^2 | \\mathbf{y} &\\sim \\mathbf{y}^T (A^{-1} - A^{-1}H(H^T A^{-1}H)^{-1}H^T A^{-1})\\mathbf{y} \\chi_{n-q}^{-2}.
+\\end{align*}
+")
+```
+\end{tcolorbox}
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+Therefore,
+\\begin{equation}
+\\mathbb{E}[\\pmb \\beta | \\mathbf{y}] = (H^T A^{-1}H)^{-1}H^T A^{-1}\\mathbf{y}.
+\\end{equation}
+
+The diagonal matrix $B$ containing the unknown $q$ smoothing parameters cannot be handled analytically like $\\pmb \\beta$ and $\\sigma^2$ can. Options available to us here are discussed in Section XXX.
+")
+```
+
+## A posteriori
+
+### The data
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+We now 'observe' $\\eta(.)$ at $n$ design points $\\{\\textbf{x}_1, \\dots, \\textbf{x}_n \\}$, obtaining data $$\\mathbf{y}^T = (y_1 = \\eta(\\mathbf{x}_1), \\dots, y_n = \\eta(\\mathbf{x}_n)),$$
+with
+\\begin{equation}
+\\mathbf{y} \\; | \\; \\pmb \\beta, \\sigma^2 \\sim
+N(H \\pmb \\beta, \\sigma^2 A),
+\\end{equation}
+where
+\\begin{align*}
+H &= (\\mathbf{h}(\\mathbf{x}_1) , \\dots, \\mathbf{h}(\\mathbf{x}_n)), \\\\
+A &=
+\\begin{pmatrix}
+c(\\textbf{x}_1, \\textbf{x}_1) & \\dots & c(\\textbf{x}_1, \\textbf{x}_n) \\\\
+\\vdots & \\ddots & \\vdots \\\\
+c(\\textbf{x}_n, \\textbf{x}_1) & \\dots & c(\\textbf{x}_n, \\textbf{x}_n) \\\\
+\\end{pmatrix}
+.
+\\end{align*}
+")
+```
+
+### Posterior distribution of $\eta(.)$
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+A posteriori,
+")
+```
+
+\begin{tcolorbox}[colframe=`r noquote(irregular_box)`!25,colback=`r noquote(irregular_box)`!10]
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+\\vspace{-0.2cm}
+$$
+\\eta(.) | \\pmb \\beta, \\sigma^2 \\sim N(m^*(.), \\sigma^2 c*(.,.)),
+$$
+\\vspace{-0.6cm}
+")
+```
+\end{tcolorbox}
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+with posterior mean and covariance functions
+\\begin{align*}
+m^*(\\mathbf{x}) &= \\mathbf{h}(\\mathbf{x})^T \\pmb \\beta + \\textcolor{red}{ \\mathbf{t}(\\mathbf{x})^T A^{-1} } (\\mathbf{y} - H \\pmb{\\beta}), \\\\
+c^*(\\mathbf{x},\\mathbf{x}') &= c(\\mathbf{x},\\mathbf{x}') - \\textcolor{red}{ \\mathbf{t}(\\mathbf{x})^T A^{-1} } \\mathbf{t}(\\mathbf{x'})^T,
+\\end{align*}
+where
+$$
+\\mathbf{t}(\\mathbf{x})^T = (c(\\mathbf{x}, \\mathbf{x}_1),
+\\dots ,
+c(\\mathbf{x}, \\mathbf{x}_n)).
+$$
+")
+```
+
+\begin{tcolorbox}
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+Note that at a design point $\\mathbf{x}_i \\in \\{\\mathbf{x}_1, \\dots, \\mathbf{x}_n \\}$, the posterior mean function is 
+$$
+m^*(\\mathbf{x}_i) = \\mathbf{h}(\\mathbf{x}_i)^T \\pmb \\beta + \\mathbf{t}(\\mathbf{x}_i)^T A^{-1}(\\mathbf{y} - H \\pmb{\\beta}).
+$$
+Since $\\mathbf{t}(\\mathbf{x}_i)^T$ is the $i-$th row of $A$, and since $AA^{-1} = I_{n \\times n}$, $\\mathbf{t}(\\mathbf{x}_i)^T A^{-1}$ is the $i-th$ row of $I_{n \\times n}$, i.e. a row vector of length $n$ comprising zeros except for a 1 as the $i-$th entry. Therefore
+$$
+\\mathbf{t}(\\mathbf{x}_i)^T A^{-1}\\mathbf{y} = y_i
+$$
+and
+$$
+\\mathbf{t}(\\mathbf{x}_i)^T A^{-1}H \\pmb{\\beta} = \\mathbf{h}(\\mathbf{x}_i)^T \\pmb \\beta,
+$$
+and so
+\\begin{align*}
+m^*(\\mathbf{x}_i) &= \\mathbf{h}(\\mathbf{x}_i)^T \\pmb \\beta + y_i - \\mathbf{h}(\\mathbf{x}_i)^T \\pmb \\beta \\\\
+&= y_i,
+\\end{align*}
+meaning that the posterior mean function passes through the design points.
+")
+```
+\end{tcolorbox}
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+From Equation (5), we know that the likelihood function for $\\pmb \\beta$ and $\\sigma^2$ is
+$$
+f(\\mathbf{y}|\\pmb \\beta, \\sigma^2) = (2\\pi\\sigma^2)^{(-\\frac{n}{2})}\\text{exp}\\left\\{-\\frac{1}{2\\sigma^2}(\\mathbf{y} - H\\pmb\\beta)^T A^{-1} (\\mathbf{y} - H\\pmb\\beta)\\right\\}.
+$$
+")
+```
+
+\begin{tcolorbox}
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+The least squares estimator for $\\pmb \\beta$ is found by maximising this expression w.r.t. $\\pmb \\beta$, or in other words, minimising $(\\mathbf{y} - H\\pmb\\beta)^T A^{-1} (\\mathbf{y} - H\\pmb\\beta)$. Rewriting this expression gives
+\\begin{align}
+(\\mathbf{y} - H\\pmb\\beta)^T A^{-1} (\\mathbf{y} - H\\pmb\\beta) &= (\\mathbf{y}^T - \\pmb\\beta ^T H^T) A^{-1} (\\mathbf{y} - H\\pmb\\beta) \\nonumber \\\\
+&= (\\mathbf{y}^T A^{-1} - \\pmb\\beta ^T H^T A^{-1}) (\\mathbf{y} - H\\pmb\\beta) \\nonumber \\\\
+&= \\mathbf{y}^T A^{-1}\\mathbf{y} - \\mathbf{y}^T A^{-1}H\\pmb\\beta - \\pmb\\beta ^T H^T A^{-1}\\mathbf{y} + \\pmb\\beta ^T H^T A^{-1}H\\pmb\\beta \\nonumber \\\\
+&= \\mathbf{y}^T A^{-1}\\mathbf{y} - 2\\pmb\\beta ^T H^T A^{-1}\\mathbf{y} + \\pmb\\beta ^T H^T A^{-1}H\\pmb\\beta
+\\end{align}
+with Equation (6) coming from the fact that
+\\begin{align*}
+(\\pmb\\beta ^T H^T A^{-1}\\mathbf{y})^T
+&= \\mathbf{y}^T (A^{-1})^T H \\pmb\\beta \\\\
+&= \\mathbf{y}^T A^{-1} H \\pmb\\beta
+\\end{align*}
+(since $A$ is symmetric) and
+$$
+\\pmb\\beta ^T H^T A^{-1}\\mathbf{y} = \\mathbf{y}^T A^{-1} H \\pmb\\beta
+$$
+since both $\\pmb\\beta ^T H^T A^{-1}\\mathbf{y}$ and $\\mathbf{y}^T A^{-1} H \\pmb\\beta$ are scalars. We differentiate Equation (6) w.r.t. each $\\beta_i$ of $\\pmb \\beta$, giving
+\\begin{align*}
+\\frac{\\partial}{\\partial \\beta_i}
+(\\mathbf{y}^T A^{-1}\\mathbf{y} - 2\\pmb\\beta ^T H^T A^{-1}\\mathbf{y} + \\pmb\\beta ^T H^T A^{-1}H\\pmb\\beta) &=
+- 2 \\frac{\\partial}{\\partial \\beta_i} \\pmb\\beta ^T H^T A^{-1}\\mathbf{y} + \\frac{\\partial}{\\partial \\beta_i}\\pmb\\beta ^T H^T A^{-1}H\\pmb\\beta.
+\\end{align*}
+Note that $\\dfrac{\\partial}{\\partial \\beta_i} \\pmb\\beta ^T H^T A^{-1}\\mathbf{y}$ is the $i-$th element of the $(q \\times 1)$ vector $H^T A^{-1}\\mathbf{y}$ and, since [CHANGE THE PARTIAL TO REGULAR?]
+$$
+\\dfrac{\\partial}{\\partial \\pmb \\beta} \\pmb\\beta ^T H^T A^{-1}\\mathbf{y} =
+\\begin{pmatrix}
+\\dfrac{\\partial}{\\partial \\beta_1} \\pmb\\beta ^T H^T A^{-1}\\mathbf{y} \\\\
+\\vdots \\\\
+\\dfrac{\\partial}{\\partial \\beta_q} \\pmb\\beta ^T H^T A^{-1}\\mathbf{y}
+\\end{pmatrix},
+$$
+we have that
+$$
+\\dfrac{\\partial}{\\partial \\pmb \\beta} \\pmb\\beta ^T H^T A^{-1}\\mathbf{y} = H^T A^{-1}\\mathbf{y}.
+$$
+
+Further, $\\pmb\\beta ^T H^T A^{-1}H\\pmb\\beta$ is a scalar quantity, with $\\dfrac{\\partial}{\\partial \\beta_i}\\pmb\\beta ^T H^T A^{-1}H\\pmb\\beta$ the $i-$th element of the $(q \\times 1)$ vector $2H^T A^{-1}H\\pmb\\beta$, and thus
+$$
+\\dfrac{\\partial}{\\partial \\pmb \\beta}\\pmb\\beta ^T H^T A^{-1}H\\pmb\\beta = 2H^T A^{-1}H\\pmb\\beta.
+$$
+Therefore
+\\begin{align*}
+\\frac{\\partial}{\\partial \\pmb \\beta}
+(\\mathbf{y}^T A^{-1}\\mathbf{y} - 2\\pmb\\beta ^T H^T A^{-1}\\mathbf{y} + \\pmb\\beta ^T H^T A^{-1}H\\pmb\\beta)
+&= -2 H^T A^{-1}\\mathbf{y} + 2H^T A^{-1}H\\pmb\\beta.
+\\end{align*}
+Setting this equal to 0 gives
+\\begin{align}
+2H^T A^{-1}H \\hat{\\pmb\\beta} &= 2 H^T A^{-1}\\mathbf{y} \\nonumber \\\\
+H^T A^{-1}H\\hat{\\pmb\\beta} &= H^T A^{-1}\\mathbf{y} \\nonumber \\\\
+\\hat{\\pmb\\beta} &= (H^T A^{-1}H)^{-1}H^T A^{-1}\\mathbf{y}.
+\\end{align}
+")
+```
+\end{tcolorbox}
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+Combining Equations (5) and (8) gives
+\\begin{equation}
+\\mathbb{E}[\\pmb \\beta | \\mathbf{y}] = \\hat{\\pmb \\beta}.
+\\end{equation}
+")
+```
+
+\begin{tcolorbox}
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+The tower rule (the law of total expectation) states that, for two random variables $X$ and $Y$
+$$
+\\mathbb{E}[X] = \\mathbb{E}_Y[X|Y]
+$$
+and so, a priori,
+\\begin{align*}
+\\mathbb{E}[\\eta(\\mathbf{x})]
+&= \\mathbb{E}_{\\pmb \\beta}[\\mathbb{E}[\\eta(\\mathbf{x}) | \\pmb \\beta]]
+\\\\
+&= \\mathbb{E}_{\\pmb \\beta}[m(\\mathbf{x})]
+\\\\
+&= \\mathbb{E}_{\\pmb \\beta}[\\mathbf{h}(\\mathbf{x})^T \\pmb{\\beta}]
+\\\\
+&= \\mathbf{h}(\\mathbf{x})^T \\mathbb{E}_{\\pmb \\beta}[\\pmb{\\beta}]
+\\\\
+&= \\mathbf{h}(\\mathbf{x})^T \\mathbb{E}[\\pmb{\\beta}]
+\\end{align*}
+and, using Equation (8), a posteriori,
+\\begin{align*}
+\\mathbb{E}[\\eta(\\mathbf{x}) | \\textcolor{Red}{\\mathbf{y}}]
+&= \\mathbb{E}_{\\pmb \\beta \\textcolor{Red}{\\mathbf{|y}}}[\\mathbb{E}[\\eta(\\mathbf{x}) | \\pmb \\beta \\textcolor{Red}{\\mathbf{, y}}]]
+\\\\
+&= \\mathbb{E}_{\\pmb \\beta | \\mathbf{y}}[m^*(\\mathbf{x})]
+\\\\
+&= \\mathbb{E}_{\\pmb \\beta | \\mathbf{y}}[\\mathbf{h}(\\mathbf{x})^T \\pmb \\beta + \\mathbf{t}(\\mathbf{x})^T A^{-1}(\\mathbf{y} - H \\pmb{\\beta})]
+\\\\
+&= \\mathbf{h}(\\mathbf{x})^T \\mathbb{E}_{\\pmb \\beta | \\mathbf{y}}[\\pmb \\beta] + \\mathbf{t}(\\mathbf{x})^T A^{-1}(\\mathbf{y} - H \\mathbb{E}_{\\pmb \\beta | \\mathbf{y}}[\\pmb{\\beta}])
+\\\\
+&= \\mathbf{h}(\\mathbf{x})^T \\mathbb{E}[\\pmb \\beta | \\mathbf{y}] + \\mathbf{t}(\\mathbf{x})^T A^{-1}(\\mathbf{y} - H \\mathbb{E}[\\pmb \\beta | \\mathbf{y}])
+\\\\
+&= \\mathbf{h}(\\mathbf{x})^T \\hat{\\pmb \\beta} + \\mathbf{t}(\\mathbf{x})^T A^{-1}(\\mathbf{y} - H \\hat{\\pmb \\beta})
+\\end{align*}
+which, using Equation (7) gives
+\\begin{equation}
+\\mathbb{E}[\\eta(\\mathbf{x}) | \\mathbf{y}] = \\mathbf{h}(\\mathbf{x})^T (H^T A^{-1}H)^{-1}H^T A^{-1}\\mathbf{y} + \\mathbf{t}(\\mathbf{x})^T A^{-1}(\\mathbf{y} - H (H^T A^{-1}H)^{-1}H^T A^{-1}\\mathbf{y}).
+\\end{equation}
+")
+```
+\end{tcolorbox}
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+unconditional on $\\pmb \\beta$ and $\\sigma^2$, is
+$$
+m^{**}(\\mathbf{x}) = \\mathbf{h}(\\mathbf{x})^T \\hat{\\pmb \\beta} + \\mathbf{t}(\\mathbf{x})^T A^{-1}(\\mathbf{y} - H \\hat{\\pmb{\\beta}})
+$$
+
+$$
+Here,
+\\begin{align}
+\\mathbb{E}[\\eta(\\mathbf{x}) \\; | \\; \\mathbf{y}]
+&=
+\\mathbb{E}
+\\Bigl[
+\\mathbb{E} []
+\\Bigr]
+\\end{align}
+")
+```
+
+### Estimating the unknown parameters
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+
+
+For $B$ we have a couple of options: 
+
+1. Fixing $B$, possibly incorporating prior knowledge about the smoothness of $\\eta(.)$ in each of the $q$ dimensions of the input. 
+
+2. Assigning an (improper) uniform prior for each element of $B$ and non-informative priors for $\\pmb \\beta$ and $\\sigma^2$ then estimating it from the posterior mode.
+
+3. For each of the $n$ data points, derive the posterior distribution of $\\eta(.)$ using the all data points bar this (the $i$th) one, then finding $d_i$, the absolute distance between the posterior mean of $\\eta(\\mathbf{x}_i)$ and $y_i$, then find $B$ that minimises $\\sum\\limits_{i=1}^n d_i$. This approach works better than the posterior mode in higher dimensions (@oakley99).
+")
+```
+
+```{r, results='asis', echo=show_text[1], include=show_text[2]}
+cat("
+$\\text{\\textcolor{BlueGreen}{nugget term}}$
+")
+```
+
+```{r plots the prior draws (small x.star), fig.width=5, fig.height=3, fig.cap=caption, echo=essential_figures[1], include=essential_figures[2]}
+caption <- "hi"
+```
+
+
+```{r prior}
+x <- c(0, pi/4, pi/2)
+
+
+l <- 1
+cov.function <- function(x1,x2, l){
+  exp(- (x1-x2)^2 / (2 * l^2))
+}
+covMatrix.function <- function(x1, x2, l){
+  covMatrix <- matrix(NA, nrow = length(x1), ncol = length(x2))
+  for (i in 1:length(x1)) {
+    for (j in 1:length(x2)) {
+      covMatrix[i,j] <- cov.function(x1[i], x2[j], l)
+    }
+  }
+  return(covMatrix)
+  covMatrix <<- covMatrix
+}
+A <- covMatrix.function(x,x,l)
+round(A,1)
+A.inv <- solve(A)
+round(A.inv,1)
+# Verifying that t(x), where x is the ith design point, is the ith row of the matrix A
+for (k in 1:length(x)) {
+  print(round(covMatrix.function(x[k],x,l),1))
+}
+```
+
+
+```{r posterior}
+y <- sin(x) # 0, 1/sqrt(2), 1
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- \begin{tcolorbox}[ -->
+<!-- colframe=blue!25, -->
+<!-- colback=blue!10, -->
+<!-- coltitle=blue!20!black,   -->
+<!-- title= More Test] -->
+<!-- Test -->
+<!-- \end{tcolorbox} -->
+
+
+
+
+
+# Citations
