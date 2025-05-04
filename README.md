@@ -8,3 +8,6 @@ gitcreds::gitcreds_set()
 
 ## Removing files you don't want Git-ted
 git rm -r --cached .Rproj.user/**
+
+## Downloading an entire folder from GitHub
+https://download-directory.github.io
