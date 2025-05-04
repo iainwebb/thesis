@@ -1,0 +1,395 @@
+---
+title: "Two variable GP fitted"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+urlcolor: blue
+bibliography: references.bib
+link-citations: yes
+linkcolor: blue
+nocite: |
+  
+
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{subfig}
+  - \usepackage{tcolorbox}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+---
+
+# Fitting a GP in `R`
+
+The following is again taken from @keirstead12, a demo of Gaussian process regression with R by James Keirstead (5 April 2012).
+
+```{r, load_packages, include=F}
+# Load in the required libraries for data manipulation
+# and multivariate normal distribution
+require(MASS)
+require(plyr)
+require(reshape2)
+require(ggplot2)
+```
+
+## Start with $X_1, X_2 \sim$ U $[0,1]$
+
+```{r}
+x1 <- runif(100000)
+x2 <- runif(100000)
+```
+
+## Define (MC) $p(Z) \sim h(X_1, X_2)$
+
+We'll define the forcing as $p(Z) = \sqrt{9 - x_1^2 - x_2^2}$.
+
+```{r, echo=F}
+z <- (9 - x1^2 - x2^2)^(1/2)
+data <- data.frame(x1=x1,x2=x2,z=z)
+
+ggplot() + 
+  geom_point(data = data, aes(x = x1, y = x2, color = z)) 
+```
+
+## Define $Y = f(X_1, X_2)$
+
+We'll first define the constraint as $Y = \sqrt{9 - x_1^2 - x_2^2}$, i.e. the same as the forcing. This will lead to matching alignment in the corresponding contour plots.
+
+## Observe $\tilde{y} = Y + \epsilon$
+
+Assume we have 5 observations at the following configurations of $X_1$ and $X_2$: \[ [X_1, X_2] = \{ [0.1, 0.75], [0.2, 0.3], [0.5, 0.8], [0.75, 0.2], [0.9, 0.5] \}, \]
+
+with a random error sampled from N$(0,0.1^2)$.
+
+```{r, include=F}
+x1_obs <- c(0.2, 0.75, 0.9, 0.5, 0.1)
+x2_obs <- c(0.3, 0.2, 0.5, 0.8, 0.75)
+obs_error <- rnorm(5, 0, 0.0000000000000000000000000000000000000000001)
+obs <- (9 - x1_obs^2 - x2_obs^2)^(1/2) + obs_error
+
+obs_df <- data.frame(x1_obs=x1_obs,x2_obs=x2_obs,obs=obs)
+```
+
+```{r, echo=F}
+ggplot() + 
+  geom_point(data = data, aes(x = x1, y = x2, color = z)) +
+  geom_point(data = obs_df, shape=21, color="black", size=4, aes(x = x1_obs, y = x2_obs, fill = obs))
+```
+
+## Derive (MCMC) $p(X_1, X_2 | \tilde{y})$
+
+
+
+## The GP prior
+
+```{r, include=F, cache=T}
+x_pts_num <- 50
+x_pts_num_s <- 10
+```
+
+First for a (dense) set of `r x_pts_num` regularly-spaced input values (denoted $x^*$) we populate the covariance matrix using the chosen covariance function, or *kernel*, $k(\cdot, \cdot)$, in this case the squared exponential with length parameter $\Psi = 1$. One such covariance matrix $k(x^*, x^*)$ is printed below, but for only `r x_pts_num_s` regularly-spaced points, rather than the `r x_pts_num` used in the remaining of the work below:
+<!-- Although the nested loops are ugly, I've checked and it's about 30% faster than a solution using expand.grid() and apply() -->
+
+```{r covariance_matrix_small, include=F, cache=T}
+# Parameters:
+#	X1, X2 = vectors
+# 	l = the scale length parameter
+# Returns:
+# 	a covariance matrix
+calcSigma <- function(X1,X2,l=1) {
+  Sigma <- matrix(rep(0, length(X1)*length(X2)), nrow=length(X1))
+  for (i in 1:nrow(Sigma)) {
+    for (j in 1:ncol(Sigma)) {
+      Sigma[i,j] <- exp(-0.5*(abs(X1[i]-X2[j])/l)^2)
+    }
+  }
+  return(Sigma)
+}
+x.star_s <- seq(0,2*pi, len=x_pts_num_s)
+k.xsxs_s <- calcSigma(x.star_s,x.star_s)
+```
+
+```{r, echo=F}
+# Utility function to print matrices in proper LaTeX format
+print_mat <- function(mat) {
+  n <- nrow(mat)
+  c('\\begin{bmatrix}',
+    paste0(sapply(seq_len(n - 1),
+                  function(i) paste0(mat[i, ], collapse = ' & ')),
+           ' \\\\'),
+    paste0(mat[n, ], collapse = ' & '),
+    '\\end{bmatrix}')
+} 
+```
+
+```{r, results = 'asis', echo=F}
+writeLines(c('$$',
+             print_mat(
+               round(k.xsxs_s,3)
+             ),
+             '$$'))
+```
+
+```{r covariance_matrix, include=F, cache=T}
+# Parameters:
+#	X1, X2 = vectors
+# 	l = the scale length parameter
+# Returns:
+# 	a covariance matrix
+calcSigma <- function(X1,X2,l=1) {
+  Sigma <- matrix(rep(0, length(X1)*length(X2)), nrow=length(X1))
+  for (i in 1:nrow(Sigma)) {
+    for (j in 1:ncol(Sigma)) {
+      Sigma[i,j] <- exp(-0.5*(abs(X1[i]-X2[j])/l)^2)
+    }
+  }
+  return(Sigma)
+}
+x.star <- seq(0,2*pi, len=x_pts_num)
+k.xsxs <- calcSigma(x.star,x.star)
+```
+
+Figure 1 plots some sample functions drawn from the the zero-mean Gaussian process prior with the aforementioned covariance matrix in order to give an idea of the type of functions it specifies.
+
+```{r, include=F, cache=T}
+# Generate a number of functions from the process
+n.samples_s <- 3
+values <- matrix(rep(0,length(x.star)*n.samples_s), ncol=n.samples_s)
+for (i in 1:n.samples_s) {
+  # Each column represents a sample from a multivariate normal distribution
+  # with zero mean and covariance k.xsxs
+  values[,i] <- mvrnorm(1, rep(0, length(x.star)), k.xsxs)
+}
+values <- cbind(x=x.star,as.data.frame(values))
+values <- melt(values,id="x")
+```
+
+```{r, echo=F, fig.align='center', fig.width=5, fig.height=3, , fig.cap="Three functions sampled from the GP prior distribution.", cache=T}
+# Plot the result
+fig2a <- ggplot(values,aes(x=x,y=value)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-2.25, ymax=2.25, fill="white") +
+  geom_line(aes(color=variable), show.legend = FALSE) +
+  theme_bw() +
+  scale_y_continuous(lim=c(-2,2), name="output, f(x)") +
+  xlab("input, x")
+fig2a
+```
+
+### GP posteriors
+
+#### Noisy-observations but a noise-free GP posterior
+
+```{r, include=F, cache=T}
+n <- 5
+```
+
+Next, we'll generate `r n` data points using the $\sin(x)$ function in the range $x \in [0.2, 2\pi]$, imagining that that is the underlying real-like function we're interested in learning about. An observation error, randomly sampled from N$(0, 0.1^2)$, is added to each term. The 'observed' values are denoted $z$ and the associated input values $x$. The observations produced are shown in Figure 2, and the observation error added on visible by the fact that they tend not to sit exactly on the function.
+
+```{r real life process function, include=F, cache=T}
+real_life_process <- function(x){
+  sin(x)
+}
+```
+
+```{r sample simulation, include=F, cache=T}
+
+# control_inputs <- matrix(seq(1,2*pi-1,len=n), ncol = 1)
+control_inputs <- matrix(c(1.0258262, 2.0516523, 3.0774785, 4.2315330, 5.2573591), ncol = 1)
+
+var_meas_err <- 0.01
+obs_errors <- matrix(rnorm(n,0,sd = sqrt(var_meas_err)), ncol=1)
+
+zeta <- real_life_process(control_inputs)
+obs <- as.matrix(zeta, ncol=1) + obs_errors
+
+f <- data.frame(x=control_inputs,
+                y=obs)
+colnames(f) <- c("control_inputs", "obs")
+```
+
+```{r, echo=F, fig.align='center', fig.width=5, fig.height=3, , fig.cap="The true process, $\\zeta(x)$, is indicated with the line, and five observations, $z$, by the points.", cache=T}
+# Plot the result
+fig <- ggplot(f, aes(control_inputs, obs)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-2.25, ymax=2.25, fill="white") + 
+  geom_point() +
+  geom_function(fun = function(x) sin(x), linetype="dashed") +
+  xlab("input, x") +
+  xlim(0,2*pi) +
+  scale_y_continuous(lim=c(-2,2), name="variable of interest") +
+  theme_bw()
+fig
+```
+
+To specify the posterior GP distribution, we need three further covariance matrices: $k(x, x)$, $k(x, x^*)$ and $k(x^*, x)$ (recall that $k(\cdot, \cdot)$ was described in Section 1.1.1.). Using these four covaraince matrices, The posterior distribution is derived using Equation (2.19) in @rasmussen06:
+
+\begin{align*}
+\mathbf{f}^* | x^*, x, \mathbf{f} &\sim N(k(x^*,x) k(x,x)^{-1}\mathbf{y}, \\
+& \hspace{1cm} k(x^*, x^*) - k(x^*,x)k(x,x)^{-1}k(x,x^*))
+\end{align*}
+
+```{r, include=F, cache=T}
+x <- f$control_inputs
+k.xx <- calcSigma(x,x)
+k.xxs <- calcSigma(x,x.star)
+k.xsx <- calcSigma(x.star,x)
+# k.xsxs <- calcSigma(x.star,x.star)
+```
+
+```{r, include=F, cache=T}
+f.star.bar <- k.xsx%*%solve(k.xx)%*%f$obs
+cov.f.star <- k.xsxs - k.xsx%*%solve(k.xx)%*%k.xxs
+```
+
+```{r, include=F, cache=T}
+n.samples_m <- 20
+```
+
+Next, we'll generate and plot `r n.samples_m` functions from the posterior distribution, along with the mean function and 95% confidence interval. Outside of the interval on which we have data, the mean function returns towards zero.
+
+```{r, include=F, cache=T}
+values <- matrix(rep(0,length(x.star)*n.samples_m), ncol=n.samples_m)
+for (i in 1:n.samples_m) {
+  values[,i] <- mvrnorm(1, f.star.bar, cov.f.star)
+}
+values <- cbind(x=x.star,as.data.frame(values))
+values <- melt(values,id="x")
+```
+
+```{r, include=F, cache=T}
+n.samples <- 1000
+values_l <- matrix(rep(0,length(x.star)*n.samples), ncol=n.samples)
+for (i in 1:n.samples) {
+  values_l[,i] <- mvrnorm(1, f.star.bar, cov.f.star)
+}
+values_l <- cbind(x=x.star,as.data.frame(values_l))
+values_l <- melt(values_l,id="x")
+```
+
+```{r, include=F, cache=T}
+post_summ <- data.frame(x.star, f.star.bar, rep(NA, length(x.star)), rep(NA, length(x.star)))
+colnames(post_summ) <- c("x.star", "f.star.bar", "lower", "upper")
+for (i in 1:length(x.star)) {
+  post_summ[i, 3] <- quantile(values_l[seq(i, length(x.star)*n.samples, by=length(x.star)),3], 0.025)
+}
+for (i in 1:length(x.star)) {
+  post_summ[i, 4] <- quantile(values_l[seq(i, length(x.star)*n.samples, by=length(x.star)),3], 0.975)
+}
+```
+
+```{r, echo=F, fig.align='center', fig.width=5, fig.height=3, , fig.cap="The posterior mean function (red solid line) along with 20 functions sampled from the posterior (grey) and 95% confidence intervals (red dashed line). The underlying real-life function is again a dashed black line.", cache=T}
+fig2b <- ggplot(values,aes(x=x,y=value)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-2.25, ymax=2.25, fill="white") +
+  geom_line(aes(group=variable), colour="grey80") + 
+  geom_line(data=values_l, aes(x=rep(x.star,n.samples), y=rep(f.star.bar,n.samples)),colour="red", linewidth=0.8) +
+  geom_point(data=f,aes(x=control_inputs,y=obs)) +
+  geom_line(data=post_summ,aes(x=x.star,y=lower), colour="red", linewidth=0.25) +
+  geom_line(data=post_summ,aes(x=x.star,y=upper), colour="red", linewidth=0.25) +
+  theme_bw() +
+  scale_y_continuous(lim=c(-2,2), name="output, f(x)") +
+  xlab("input, x") +
+  geom_function(fun = function(x) sin(x), colour="red", linetype="dashed")
+fig2b
+```
+
+#### Noisy-observations and a GP posterior with noise
+
+```{r, include=F, cache=T}
+obs_noise <- 0.1
+```
+
+Since there is observation error, it might make more sense for the posterior draws *not* to pass through the observed points. This can be achieved by adding a constant (observation noise) term onto the diagonal of the covariance matrix. Recalling that normally distributed measurement errors sampled from N(0, `r var_meas_err`) were added to the simulated values, we'll add `r obs_noise` to the diagonal of the covariance matrix as observation noise.
+
+```{r, include=F, cache=T}
+x <- f$control_inputs
+k.xx.noise <- k.xx + obs_noise * diag(1, ncol(k.xx))
+```
+
+```{r, include=F, cache=T}
+f.star.bar <- k.xsx%*%solve(k.xx.noise)%*%f$obs
+cov.f.star <- k.xsxs - k.xsx%*%solve(k.xx.noise)%*%k.xxs
+```
+
+```{r, include=F, cache=T}
+n.samples_m <- 20
+```
+
+Figure 4 replicates Figure 3 to incorporate this added noise, and now the mean function (thick red line) doesn't pass through the data points, and clearly the posterior uncertainty (thin solid red lines) has increased:
+
+```{r, include=F, cache=T}
+values <- matrix(rep(0,length(x.star)*n.samples_m), ncol=n.samples_m)
+for (i in 1:n.samples_m) {
+  values[,i] <- mvrnorm(1, f.star.bar, cov.f.star)
+}
+values <- cbind(x=x.star,as.data.frame(values))
+values <- melt(values,id="x")
+```
+
+```{r, include=F, cache=T}
+n.samples <- 1000
+values_l <- matrix(rep(0,length(x.star)*n.samples), ncol=n.samples)
+for (i in 1:n.samples) {
+  values_l[,i] <- mvrnorm(1, f.star.bar, cov.f.star)
+}
+values_l <- cbind(x=x.star,as.data.frame(values_l))
+values_l <- melt(values_l,id="x")
+```
+
+```{r, include=F, cache=T}
+post_summ <- data.frame(x.star, f.star.bar, rep(NA, length(x.star)), rep(NA, length(x.star)))
+colnames(post_summ) <- c("x.star", "f.star.bar", "lower", "upper")
+for (i in 1:length(x.star)) {
+  post_summ[i, 3] <- quantile(values_l[seq(i, length(x.star)*n.samples, by=length(x.star)),3], 0.025)
+}
+for (i in 1:length(x.star)) {
+  post_summ[i, 4] <- quantile(values_l[seq(i, length(x.star)*n.samples, by=length(x.star)),3], 0.975)
+}
+```
+
+```{r, echo=F, fig.align='center', fig.width=5, fig.height=3, , fig.cap="The posterior mean function (red solid line) along with 20 functions sampled from the posterior (grey) and 95% confidence intervals (red dashed line). The underlying real-life function is again a dashed black line.", cache=T}
+fig2b <- ggplot(values,aes(x=x,y=value)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-2.25, ymax=2.25, fill="white") +
+  geom_line(aes(group=variable), colour="grey80") + 
+  geom_line(data=values_l, aes(x=rep(x.star,n.samples), y=rep(f.star.bar,n.samples)),colour="red", linewidth=0.8) +
+  geom_point(data=f,aes(x=control_inputs,y=obs)) +
+  geom_line(data=post_summ,aes(x=x.star,y=lower), colour="red", linewidth=0.25) +
+  geom_line(data=post_summ,aes(x=x.star,y=upper), colour="red", linewidth=0.25) +
+  theme_bw() +
+  scale_y_continuous(lim=c(-2,2), name="output, f(x)") +
+  xlab("input, x") +
+  geom_function(fun = function(x) sin(x), colour="red", linetype="dashed") 
+# +
+  # geom_errorbar(data=f,aes(x=control_inputs,y=NULL,ymin=obs-2*sqrt(obs_noise), ymax=obs+2*sqrt(obs_noise)), width=0.2)
+fig2b
+```
+
+<!-- # Recalculate the mean and covariance functions -->
+<!-- f.bar.star <- k.xsx%*%solve(k.xx + sigma.n^2*diag(1, ncol(k.xx)))%*%f$y -->
+<!-- cov.f.star <- k.xsxs - k.xsx%*%solve(k.xx + sigma.n^2*diag(1, ncol(k.xx)))%*%k.xxs -->
+
+<!-- # Recalulate the sample functions -->
+<!-- values <- matrix(rep(0,length(x.star)*n.samples), ncol=n.samples) -->
+<!-- for (i in 1:n.samples) { -->
+<!--   values[,i] <- mvrnorm(1, f.bar.star, cov.f.star) -->
+<!-- } -->
+<!-- values <- cbind(x=x.star,as.data.frame(values)) -->
+<!-- values <- melt(values,id="x") -->
+
+<!-- # Plot the result, including error bars on the observed points -->
+<!-- ```{r} -->
+
+<!-- ``` -->
+
+<!-- gg <- ggplot(values, aes(x=x,y=value)) +  -->
+<!--   geom_line(aes(group=variable), colour="grey80") + -->
+<!--   geom_line(data=NULL,aes(x=rep(x.star,50),y=rep(f.bar.star,50)),colour="red", size=1) +  -->
+<!--   geom_errorbar(data=f,aes(x=x,y=NULL,ymin=y-2*sigma.n, ymax=y+2*sigma.n), width=0.2) + -->
+<!--   geom_point(data=f,aes(x=x,y=y)) + -->
+<!--   theme_bw() + -->
+<!--   scale_y_continuous(lim=c(-4,4), name="output, f(x)") + -->
+<!--   xlab("input, x") -->
+<!-- gg -->
+
+
+\newpage
+
+# Citations
