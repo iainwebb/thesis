@@ -1,0 +1,704 @@
+---
+title: "Confirmation Review Report"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+    includes:
+      after_body: appendix.md
+urlcolor: blue
+bibliography: references.bib
+link-citations: yes
+linkcolor: blue
+nocite: '@*'
+fontsize: 10pt
+linestretch: 1.19
+
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{subfig}
+  - \usepackage[most]{tcolorbox}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \usepackage[font=small,skip=0pt]{caption}
+  # - \usepackage{ulem}
+  - \setlength{\parskip}{1em}
+  - \setlength\parindent{24pt}
+---
+
+```{r code chunk options, echo=F}
+show_text <- c(FALSE, TRUE) # Leave first as F, second T to show text
+run_but_hidden <- FALSE
+key_code <- TRUE
+not_run <- FALSE
+essential_figures <- c(FALSE, TRUE)
+cache_things <- FALSE
+regular_box <- "black"
+irregular_box <- "red"
+
+knitr::opts_chunk$set(fig.align="center")
+```
+
+
+# Project details
+
+- Student name: Iain Webb
+- Registration number: 230271355
+- Supervisors: Jill Johnson (primary), Jeremy Oakley (secondary)
+- Advisor: Paul Blackwell
+- Date of registration: 01/04/2024
+- General research area: Uncertainty quantification in climate modelling
+
+
+# Project content and summary of first-year work
+
+To better understand, and facilitate predictions of, the Earth's climate, complex computer models are used [@carslaw22]. These **simulators** are black boxes, highly complex and computationally expensive due to the nature of the system behaviour they are attempting to model, and are built using expert knowledge of the real-world processes. They take in combinations of the settings of the simulator's **input parameters** and returning as their output values of variables of interest, some of which are unobservable. These outputs allow for insight into the state of the system under particular conditions, and prediction and assessment of potential real-world impacts. Each combination of settings of the input parameters constitute a different model **variant**. The simulators are improved with use of observations. 
+
+The use of models in this instance involves several sources of uncertainty. Firstly, a model is only ever a representation of reality and can't everything known about a system. As such, modellers have to decide which processes and corresponding input parameters they wish to include, as well as any other  assumptions and simplifications, collectively known as *parametrisations*. These choices, along with the fact that there will be parts of the real-world system which are still unknown or not understood, introduce **model discrepancy**. Next, the real-life system itself will have **natural variability**. Finally, assuming there is a 'best' combination of settings of the input parameter, this will be unknown. 
+As well as model discrepancy, my project is most concerned with this final source of uncertainty and how it propagates through the model to increase uncertainty in outputs of interest, a area of research known as **uncertainty analysis** or **uncertainty quantification** [@oakley11]. 
+
+Assuming $k$ inputs, placing ranges -- obtained through expert elicitation [@oakley23] -- on each of them creates a $k$-dimensional hypercube-shaped  **uncertainty space**. A two-dimensional illustration of this is provided in Figure 1. Exploring this space is desirable, since settling on and analysing a single model variant (via a potentially lengthy process of **tuning**) means that other **plausible** (consistent with observations) variants -- which might produce quite different predictions -- aren't considered, and we lose insight into the uncertainty in our predictions due to uncertainty in the inputs. The development of more and more complex models in order to better represent certain aspects of the climate, even if carried out with the stated aim of reducing uncertainty, doesn't address the problem of the uncertainty in such models' predictions not being quantified. Improving a model's **fidelity** (how closely it represents the real-world system) and reducing its uncertainty are different problems [@carslaw18].
+
+```{r 2d-par-unc-space-random-run, echo = FALSE, fig.cap='The uncertainty space for two input parameters (a). The blue point indicates a particular combination of the settings of the two input parameters (model variant). In (b), the simulator is run at this setting, resulting in the model output marked by the black point. (Figures adapted from those included in my MSc Dissertation.)', fig.subcap=c('', ''), out.width='.3\\linewidth', fig.asp=1, fig.ncol = 2}
+knitr::include_graphics(c("figures/2d-par-unc-space-random-run-1.jpg","figures/2d-par-unc-space-random-run-2.jpg"))
+```
+
+Quantifying the uncertainty in the model would involve identifying *all* variants consistent with observations. With a high-dimensional input space, not only will there will be a great many of these, but each corresponding run of the simulator would be computationally **expensive**, taking many hours or days. This is especially true in the case of climate simulators. For this reason, exploring the input parameter space sufficiently enough to be able to carry out uncertainty analysis is impractical. To overcome this problem, the simulator is treated as an unknown function (not unreasonable since climate models are in practice black boxes, with their output at a particular input setting not known until the simulator is run) and a less expensive surrogate of the simulator itself, an **emulator**, is used in its place. An emulator uses a statistical framework to map the relationship between a set of the (uncertain) input parameters and a particular model output of interest, trained on a small set of (training) model runs and validated (to ensure sufficiently close agreement with the simulator output) on a further set of runs. [@johnson15].
+
+Having used the emulator to obtain a suitably large number of model variants, thus sampling the input parameter space satisfactorily, options for analysis of the model open up to us. One such is **sensitivity analysis** (SA) [@oakley04], which is used to determine the input parameters contributing most to the uncertainty in the response. Variance-based methods are popular here.
+
+A second analysis option is **history matching**. Areas of the input parameter space not consistent with observations of an observable model output are ruled out, with these narrowed input ranges hopefully leading to narrowed ranges of an unobservable model output. In practice, this doesn't always happen. @johnson20, having obtaining 1 million model variants of version 8.4 of the Met Office's HadGEM3-UKCA model with the use of gridded emulators, found that whilst the use of more than 9000 gridded observations of six observable model outputs led to constraining of the 26 input parameters, with just 2% of the model variants being retained, the 95% confidence interval of predictions of the unobservable response variable of interest, **net aerosol radiative forcing** (RF), narrowed in width by just 8%. Net aerosol RF is the change in the difference between the amount of energy entering Earth's atmosphere and that leaving it caused that is caused by aerosols, and is a key variable indicative of global temperature change. Further constraining using additional targeted observations taken in the Southern Ocean improved on this, but still only led to an overall narrowing by 21% [@regayre20].
+
+The reason behind this might be that the respective surfaces of a particular observable output and the unobservable RF output are aligned relative to each other in such a way that constraining using the former fails to constrain the latter (**equifinality**) -- see Figure 2. I have been working on developing a measure which would indicate this alignment issue (Section 3.2), either to be used as a pre-emptive indicator -- to ensure alignment before conducting SA and history matching -- or an after-the-fact diagnostic tool -- to explain why the confidence interval of predictions of the unobservable variable hasn't narrowed significantly following reduction of the input uncertainty space. The alignment measure has been explored in 2 dimensions (assuming just two input parameters) and its results verified using simulation, with an issue requiring further attention noted (Section 4).
+
+```{r equifinality, out.width="25%", echo=F, fig.cap="The alignment of the two response surfaces (that of an observable output and the unobservable output RF) relative to each other will impact the ability of observations of the former to constrain the latter. (Figure provided by Johnson, J. S..)", warning=F}
+knitr::include_graphics("figures/equifinality.jpg")
+```
+
+The alignment measure requires understanding of the gradient of the response surfaces of the output variables with respect to the inputs and as such the derivative of these surfaces needs calculating. Since emulators are to be used in place of the simulator, I have spent time understanding the emulation process, here a **Gaussian Process emulator** (GP), and the connection between the GP of a function and that of the function's derivative (Section 3.1). Finally, I've explored the use of a GP in modelling model discrepancy, though this work is not included in the report as it doesn't currently fit with the project's main aims; it did however provide useful insight into how GPs work in practice.
+
+
+# Summary of work
+
+## Gaussian Process emulators
+
+### Uncertainty analysis using GPs
+
+Given an uncertainty space as described in Section 2, one approach to exploring it as required for uncertainty analysis is **one-at-a-time** (OAT) **perturbations**: all but one of the inputs are each held fixed at some default value, such as the tuned model variant, with the remaining parameter assigned values covering the range of those deemed possible (*perturbing*). Figures 3 and 4 visualise two-dimensional OAT perturbations. As outlined in Section 2, properly quantifying the uncertainty in a model output due to uncertainty in the 'true' values of the input parameters requires the evaluation of the simulator at all points in the input parameter uncertainty space. Clearly, even in the two-dimensional example from Figures 3 and 4 the OAT perturbations have left much of the uncertainty space unexplored. This issue is compounded with higher-dimensional input uncertainty spaces: there will be a great many models variants, each of which will take significant computer time to produce simulator outputs for. Using instead a cheaper statistical representation of the simulator, an emulator, offers a solution.
+
+```{r 2d-par-unc-space-default-run, echo = FALSE, fig.cap='The uncertainty space for two input parameters (a). The red point indicates the default value of the two inputs. In (b), the model is run at this default, resulting in the model output marked by the black point. (Figures adapted from those included in my MSc Dissertation.)', fig.subcap=c('', ''), out.width='.3\\linewidth', fig.asp=1, fig.ncol = 2}
+knitr::include_graphics(c("figures/2d-par-unc-space-default-run-1.jpg","figures/2d-par-unc-space-default-run-2.jpg"))
+```
+
+```{r 2d-par-OAT-pert, echo = FALSE, fig.cap='One-at-a-time perturbations of the input parameters. In (a), parameter 1 is perturbed; in (b) parameter 2 is perturbed. This leads to a set of output values (c). (Figures adapted from those included in my MSc Dissertation.)', fig.subcap=c('', '', ''), out.width='.2\\linewidth', fig.asp=1, fig.ncol = 3}
+knitr::include_graphics(c("figures/2d-par-OAT-pert-1.jpg","figures/2d-par-OAT-pert-2.jpg", "figures/2d-par-OAT-pert-3.jpg"))
+```
+
+To build an emulator, a set usually of size $10k$ **training points** is selected from the $k$-dimensional uncertainty space. Using **maximin Latin hypercube sampling** (LHS) here, where the minimum distance between any two points is maximised, ensures good coverage with a small number of points, as well as providing good marginal coverage (unlike, say, a factorial design). The simulator is run at these settings, generating $10k$ corresponding model outputs, which collectively form a **perturbed parameter ensemble** (PPE). The emulator, in this project a GP, is fitted to these points (see Section 3.1.6). Note that the use of a GP assumes the output varies *smoothly* over the uncertain parameter space, not chaotically or with sharp changes, which is a reasonable assumption for the model outputs I'll be looking at (namely, global averages).
+
+The GP returns an estimate of the simulator output for every point in the input uncertainty space, as well as a distribution representing the uncertainty in this estimate that arises from using the emulator in place of the simulator. This distribution will be a Gaussian, centred at the emulator estimate. In the case of a **deterministic** simulator (not stochastic, with repeated runs at identical settings of the inputs returning identical outputs), the emulator uncertainty for the output at the training points is zero, since the value of the simulator is exactly known here. A second, smaller, set of **validation points** is selected from the input uncertainty space. These points can be an *augmentation* of those selected as training points, where maximin LHS is employed in the space between the training points. The simulator is run at these new settings, and a check is made for each as to whether the model output lies within the 95% confidence interval (CI) for the emulator's estimate. If 95% of these CIs capture the actual model output (and not simply because the CIs are excessively wide) the emulator is said to have been **validated**. The emulator can then be used in place of the simulator going forward. Note that a new emulator could, at this point, be built using *both* the training points *and* the validation points (each of which was computationally expensive to obtain) and used instead. Whilst this emulator hasn't itself been validated, it is assumed that if the validated model works well then adding additional information can only improve it.
+
+### A priori form of a GP
+
+Let $\eta(.)$ be a function whose output at a certain input setting is unknown until the function's code is run (a process which takes a long time). We treat $\eta(.)$ as a random variable, in the sense that it is unknown (rather than it being the result of a random process). We describe our prior beliefs about $\eta(.)$ using a probability distribution.
+
+The **prior mean function**, $m(.)$, expresses our beliefs about the unknown function $\eta(.)$ without the influence of observations. If we have no prior knowledge about the function $\eta(.)$, ensuring that a priori $$\mathbb{E}[\eta(\mathbf{x})] = 0$$ for all $\mathbf{x}$ might seem sensible, and is known as using a **zero mean prior**. Similarly, a constant mean function where $$\mathbb{E}[\eta(\mathbf{x})] = \beta_0$$ can be used. If instead we believe, a priori, that $\eta(\mathbf{x})$ varies approximately linearly with $\mathbf{x}$, our mean function would be $$\mathbb{E}[\eta(\mathbf{x}) | \pmb{\beta}] = \beta_0 + \beta_1 \mathbf{x},$$ a **linear mean prior**, with $\pmb{\beta}^T = (\beta_0, \beta_1)$. More generally, we might want $$\mathbb{E}[\eta(\mathbf{x}) | \pmb{\beta}] = \mathbf{h}(\mathbf{x})^{\text{T}} \pmb{\beta},$$ with $\mathbf{h}(.)$ a vector of $q$ known regressor functions and $\pmb{\beta}$ a vector of $q$ unknown coefficients.
+
+Next we turn to consideration of how do we think $\eta(.)$ will deviate from $m(.)$. What candidates for $\eta(.)$ are we willing to believe could be the unknown function? As mentioned in Section 3.1.1, we certainly only want to consider relatively smooth functions, which implies that $\eta(\textbf{x})$ and $\eta(\textbf{x}^{\pmb{\prime}})$ are highly correlated if the two input settings $\textbf{x}$ and $\textbf{x}^{\pmb{\prime}}$ are close to each other. We also want this correlation to increase and decrease the closer or further away respectively $\textbf{x}^{\pmb{\prime}}$ are to one another. We define the covariance between $\eta(\textbf{x})$ and $\eta(\textbf{x}^{\pmb{\prime}})$ as $$Cov(\eta(\textbf{x}), \eta(\textbf{x}^{\pmb{\prime}}) | \sigma^2) = \sigma^2 c(\textbf{x}, \textbf{x}^{\pmb{\prime}}),$$ with $\sigma^2$ unknown and requiring estimation and $c(\cdot, \cdot)$ referred to as a **covariance function**, with $c(\mathbf{x}, \mathbf{x}) = 1$ such that, unconditional on $\sigma^2$, the variance of $\eta(\mathbf{x})$ is $\sigma^2$. A common covariance function which satisfies the above properties is the (infinitely differentiable) **squared-exponential** $$c(\mathbf{x}, \mathbf{x}^{\pmb{\prime}}) = \text{exp}(-(\mathbf{x} - \mathbf{x}^{\pmb{\prime}})^{\text{T}} B (\mathbf{x} - \mathbf{x}^{\pmb{\prime}})),$$ with $B$ a $k \times k$ diagonal matrix of smoothing parameters.
+
+A GP model for $\eta(\mathbf{x})$ is an infinite collection of random variables such that any $n-$dimensional subset of them will have a multivariate Normal distribution [@oakley99], such that
+\begin{equation}
+\eta(.) | \pmb \beta, \sigma^2 \sim N(m(.), \sigma^2 c(.,.)),
+\label{eqn:etaprior}
+\end{equation}
+where $m(.)$ and $c(.,.)$ are the choices made in Section 3.1.2.
+
+
+### Data
+
+We now observe $\eta(.)$ at $n$ design points $\{\textbf{x}_1, \dots, \textbf{x}_n \}$ (by running the simulator at these input settings), obtaining data $$\mathbf{y}^T = (y_1 = \eta(\mathbf{x}_1), \dots, y_n = \eta(\mathbf{x}_n)).$$
+From (\ref{eqn:etaprior}) we have that
+\begin{equation}
+\mathbf{y} \; | \; \pmb \beta, \sigma^2 \sim
+\text{N}(H \pmb \beta, \sigma^2 A)
+\label{eqn:datadistn}
+\end{equation}
+where
+\begin{align*}
+H &= (\mathbf{h}(\mathbf{x}_1) , \dots, \mathbf{h}(\mathbf{x}_n)), \\
+A &=
+\begin{pmatrix}
+1 & c(\textbf{x}_1, \textbf{x}_2) & \dots & c(\textbf{x}_1, \textbf{x}_n) \\
+\\
+c(\textbf{x}_2, \textbf{x}_1) & 1 & & \vdots \\
+\\
+\vdots & & \ddots & \\
+\\
+c(\textbf{x}_n, \textbf{x}_1) & \dots & & 1
+\end{pmatrix}
+.
+\end{align*}
+
+
+### A posteriori form of the GP
+
+Using Property 3 in Section 7.2 of @krzanowski88, we get, a posteriori,
+\begin{equation}
+\eta(.) | \pmb \beta, \sigma^2, \mathbf{y} \sim N(m^*(.), \sigma^2 c^*(.,.)),
+\label{eqn:etapostrdistn}
+\end{equation}
+with posterior mean and covariance functions
+\begin{align}
+m^*(\mathbf{x}) &= \mathbf{h}(\mathbf{x})^T \pmb \beta + \mathbf{t}(\mathbf{x})^T A^{-1} (\mathbf{y} - H \pmb{\beta}), \label{eqn:postrmeanfunc} \\
+c^*(\mathbf{x},\mathbf{x}') &= c(\mathbf{x},\mathbf{x}') - \mathbf{t}(\mathbf{x})^T A^{-1} \mathbf{t}(\mathbf{x'})^T, \nonumber
+\end{align}
+where $$\mathbf{t}(\mathbf{x})^T = (c(\mathbf{x}, \mathbf{x}_1), \dots, c(\mathbf{x}, \mathbf{x}_n)).$$
+Note that at a design point $\mathbf{x}_i \in \{\mathbf{x}_1, \dots, \mathbf{x}_n \}$, the posterior mean function in (\ref{eqn:postrmeanfunc}) becomes 
+$$ m^*(\mathbf{x}_i) = \mathbf{h}(\mathbf{x}_i)^T \pmb \beta + \mathbf{t}(\mathbf{x}_i)^T A^{-1}(\mathbf{y} - H \pmb{\beta})$$ and since $\mathbf{t}(\mathbf{x}_i)^T$ is the $i$-th row of $A$ and $AA^{-1} = I_n$, $\mathbf{t}(\mathbf{x}_i)^T A^{-1}$ is the $i$-th row of $I_n$, a row vector of length $n$ comprising zeros except for a 1 as the $i$-th entry. Therefore $$ \mathbf{t}(\mathbf{x}_i)^T A^{-1}\mathbf{y} = y_i $$ and $$\mathbf{t}(\mathbf{x}_i)^T A^{-1}H \pmb{\beta} = \mathbf{h}(\mathbf{x}_i)^T \pmb \beta,$$ so that
+\begin{align*}
+m^*(\mathbf{x}_i) &= \mathbf{h}(\mathbf{x}_i)^T \pmb \beta + y_i - \mathbf{h}(\mathbf{x}_i)^T \pmb \beta \\
+&= y_i,
+\end{align*}
+meaning that the posterior mean function passes through the design points as desired.
+
+### Posterior estimates for the parameters
+
+Since (\ref{eqn:etapostrdistn}) relies on $\pmb \beta$ and, via $c^*(.,.)$, $\sigma^2$, these parameters require estimation. We can either assign them a weak prior
+\begin{equation}
+p(\pmb \beta, \sigma^2) \propto \sigma^{-2}
+\label{eqn:noninfprior}
+\end{equation}
+or else incorporate expert knowledge about $\eta(.)$. Choosing the former approach, and using Bayes' Theorem to combine this prior with the likelihood function for $\pmb \beta$ and $\sigma^2$ given by (\ref{eqn:datadistn}) results in a Normal Inverse Gamma posterior distribution for $\pmb \beta$ and $\sigma^2$, with marginal posterior distributions
+\begin{align}
+\pmb \beta | \sigma^2, \mathbf{y} &\sim \text{N}((H^T A^{-1}H)^{-1}H^T A^{-1}\mathbf{y}, \; \sigma^2(H^TA^{-1}H)^{-1}), \label{eqn:betamargpostrdistn} \\
+\sigma^2 | \mathbf{y} &\sim \mathbf{y}^T (A^{-1} - A^{-1}H(H^T A^{-1}H)^{-1}H^T A^{-1})\mathbf{y} \; \chi_{n-q}^{-2}. \label{eqn:sigmasqmargpostrdistn}
+\end{align}
+The posterior expectation of $\pmb \beta$ given by (\ref{eqn:betamargpostrdistn}),
+$$\mathbb E [\pmb \beta] = (H^T A^{-1}H)^{-1}H^T A^{-1}\mathbf{y},$$ is also the generalised least squares estimate of $\pmb \beta$, and is denoted $\hat{\pmb \beta}$.
+Then, since $$p(\eta(\mathbf{x})) = \int p(\eta(\mathbf{x}) | \pmb \beta) \; p(\pmb \beta) \; d \pmb \beta,$$ we can use (\ref{eqn:etapostrdistn}) and (\ref{eqn:betamargpostrdistn}) to obtain the posterior distribution of $\eta(.)$ unconditional on $\pmb \beta$,
+\begin{equation}
+\eta(.) | \sigma^2, \mathbf{y} \sim \text{N}(m^{**}(.), \sigma^2 c^{**}(.,.)), \label{eqn:etapostrdistnunconbeta}
+\end{equation}
+where
+\begin{align}
+m^{**}(\mathbf{x}) &= \mathbf{h}(\mathbf{x})^T \hat{\pmb\beta} + \mathbf{t}(\mathbf{x})^T A^{-1} (\mathbf{y} - H \hat{\pmb\beta}), \\
+c^{**}(\mathbf{x},\mathbf{x}') &= c^*(\mathbf{x},\mathbf{x}') + (\mathbf{h}(\mathbf{x})^T - \mathbf{t}(\mathbf{x})^T A^{-1} H) (H^T A^{-1} H)^{-1} \times (\mathbf{h}(\mathbf{x})^T - \mathbf{t}(\mathbf{x})^T A^{-1} H)^T.
+\end{align}
+
+The diagonal matrix $B$ containing the unknown $q$ smoothing parameters cannot be handled analytically like $\pmb \beta$ and $\sigma^2$. Instead of placing a prior on it, it can be fixed at a value estimated using the posterior mode, cross validation or by incorporating prior knowledge about the smoothness of $\eta(.)$ in each of the $k$ dimensions of the input space [@oakley99].
+
+
+### Example of a GP
+
+```{r, include=F}
+
+# Real-life function
+simulator <- function(x){
+  sin(x)
+}
+
+# Number of observations
+n <- 5
+
+
+
+# Specify the inputs
+extra <- -1
+shift <- 0
+control_inputs <- matrix(seq(0+extra,2*pi-extra,len=n+2), ncol = 1)[2:(n+1),] + shift
+
+# Observations
+y <- simulator(control_inputs)
+y <- as.matrix(y, ncol=1)
+
+```
+
+An example with a one-dimensional input space will be used to illustrate what has been discussed so far in this section. We assume that the simulator, $\eta(.)$ has input, $x$ and the following form $$\eta(x) = \sin(x).$$ We also assume we have a limited number of runs, $\mathbf{y}$, of this simulator. We'll choose these simulations to have been run at `r n` equally-spaced values of $x$, denoted ${x_1, x_2, \dots, x_5}$. As such, $$\textbf{y} =\begin{bmatrix}\eta(x_1) \\ \vdots \\ \eta(x_5) \\ \end{bmatrix}.$$ We'll use a zero-mean function, and a squared-exponential covariance function, which for a one-dimensional input space has the form $$c(x, x^{\prime}) = \exp\left(-b(x-x^*)^2\right),$$ with $b$ a scalar smoothing parameter.
+
+```{r, include=F}
+
+library(DiceKriging)
+
+# theta <- 1
+# sigma <- 1
+# trend <- c(1.2187673,-0.3879457)
+
+model1 <- km(y~1, design=data.frame(x=control_inputs), response=data.frame(y=y), 
+             covtype="gauss" 
+             # ,coef.trend=trend
+             # ,coef.cov=1
+             # ,coef.var=sigma^2
+)
+
+
+# Predictions
+expand_quantity <- 3
+tmax <- 2*pi + expand_quantity
+tmin <- 0 - expand_quantity
+t <- seq(from=tmin, to=tmax, by=0.005)
+
+preds <- predict(model1, newdata=data.frame(x=t), type="SK")
+
+```
+
+We use the \texttt{km()} and \texttt{predict()} functions from the \texttt{R} package \texttt{DiceKriging} [@roustant12] to estimate the parameters and fit the emulator. Estimates for the parameters are $\hat{\beta_0} =$ `r round(model1@trend.coef, 2)`, $\hat{\sigma^2} =$ `r round(model1@covariance@sd2, 2)` and $\hat{b} =$ `r round(1/(2*model1@covariance@range.val^2),2)`. Figure 5 shows a plot of the posterior mean function, along with 95% confidence regions (blue). The prior mean function, $y=0$, is shown in black, and the true function in grey. The posterior mean function of the emulator clearly fits the true function extremely well in between the data points, with narrow 95% CIs. It performs less well outside the range on which data lie, with the CIs widening and the posterior mean function tending back to the prior mean function.
+
+```{r, fig.width=5, fig.height=3.5, fig.cap="The posterior mean function (solid blue line) with 95% confidence intervals (dashed blue lines). The underlying real-life function is shown in grey. The line $y=0$ is shown in black -- since we're using a zero mean prior, the posterior mean function can be seen to tend back to this line outside of the interval on which the data lie.", echo=F}
+
+gp1d <- data.frame(t, preds$mean, preds$lower95, preds$upper95)
+colnames(gp1d) <- c("x", "mean", "lower95", "upper95")
+
+x_label <- "input, $x$"
+y_label <- "output"
+
+data_points <- data.frame(control_inputs, y)
+
+# Bounds
+y_upper <- max(abs(c(max(gp1d[,-1]), min(gp1d[,-1]))))
+y_lower <- -y_upper
+
+library(ggplot2)
+library(latex2exp) # displays latex in ggplot labels
+
+ggplot(gp1d, aes(x=x, y=mean)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf, fill="white") +  
+  geom_line(data=gp1d, aes(x=x,y=mean),colour="blue", linewidth=0.5) +
+  geom_line(data=gp1d,aes(x=x,y=lower95), colour="blue", linewidth=0.25, linetype="dashed") +
+  geom_line(data=gp1d,aes(x=x,y=upper95), colour="blue", linewidth=0.25, linetype="dashed") +
+  theme_bw() +
+  scale_y_continuous(lim=c(y_lower,y_upper), name=TeX(y_label)) +
+  xlab(TeX(x_label)) +
+  geom_function(fun = function(x) sin(x), colour="grey", linewidth=0.25) +
+  scale_x_continuous(breaks  = c(seq(0, 2*pi, 2*pi)), 
+                    labels = c("0", TeX("$2\\pi$"))) +
+  geom_hline(yintercept=0, linewidth=0.5, colour="black") +
+  geom_point(data=data_points,aes(x=control_inputs,y=y), color="black")
+```
+
+
+### Derivative of a posterior mean function
+
+The posterior mean function for the derivative of an unknown function which has been modelled using a GP is just the derivative, with respect to the input parameters, of the posterior mean function of the unknown function, and this is true for any order of derivative [@ohagan92]. This will be especially important for use with the alignment measure (Section 3) which will rely on estimates of the derivative of the simulator at points in the input space. Therefore, the posterior mean function for the first-order partial derivative of the unknown function with respect to the $i$-th input parameter is
+\begin{equation}
+\dfrac{\partial}{\partial x_i} m^{**}(\mathbf{x}) = \hat{\pmb\beta} \dfrac{\partial}{\partial x_i} \mathbf{h}(\mathbf{x})^T  + A^{-1} (\mathbf{y} - H \hat{\pmb\beta}) \dfrac{\partial}{\partial x_i} \mathbf{t}(\mathbf{x})^T.
+\label{eqn:postrderivmf}
+\end{equation}
+Note that the constants $\hat{\pmb\beta}$ and $A^{-1} (\mathbf{y} - H \hat{\pmb\beta})$, which don't depend on $\mathbf{x}$, have been taken out to the front of the derivatives for clarity. Since the first-order derivative of our example simulator $\sin(x)$ is $\cos(x)$, we would hope that, in the range where the data lie, the posterior mean function for the derivative of the simulator resembles $\cos(x)$. This work is ongoing -- see Section 4.
+
+```{r, fig.width=5, fig.height=3.5, fig.cap="The posterior mean function (solid blue line) with 95% confidence intervals (dashed blue lines). The underlying real-life function is shown in grey. The line $y=0$ is shown in black -- since we're using a zero mean prior, the posterior mean function can be seen to tend back to this line outside of the interval on which the data lie.", include=F, eval=F}
+
+nf_data_points <- data.frame(control_inputs,
+                             y)
+colnames(nf_data_points) <- c("control_inputs", "y")
+
+# Prior mean function
+h1 <- function(x) {
+  1 + 0*x
+}
+
+x.star <- t
+
+l_est <- 1/(2*model1@covariance@range.val^2)
+
+sqExpCov1 <- function(X1,X2,l=l_est) {
+  Sigma <- matrix(rep(0, length(X1)*length(X2)), nrow=length(X1))
+  for (i in 1:nrow(Sigma)) {
+    for (j in 1:ncol(Sigma)) {
+      Sigma[i,j] <- exp(-(sqrt((X1[i]-X2[j])^2)/l)^2/2)
+    }
+  }
+  return(Sigma)
+}
+
+
+
+# t(x)^T
+k.xsx <- sqExpCov1(x.star, control_inputs)
+t_xT <- k.xsx
+
+# h(x)^T
+h_xT <- matrix(c(h1(x.star)
+                 # , h2_2(x.star)
+                 ), nrow = length(x.star), byrow = F)
+
+beta_hat <- model1@trend.coef
+
+k.xx.no_noise <- sqExpCov1(control_inputs, control_inputs) + diag(0.001, length(control_inputs))
+A <- k.xx.no_noise
+
+# H
+H1 <- matrix(h1(control_inputs), nrow = length(control_inputs))
+H <- H1
+
+f.star.bar.no_noise <- h_xT %*% beta_hat +  k.xsx %*% solve(A) %*% (nf_data_points$y - H %*% beta_hat)
+
+d_dxk_t_xT <- matrix(NA, nrow = length(t), ncol = n)
+for (i in 1:length(t)) {
+  for (j in 1:n) {
+    d_dxk_t_xT[i,j] <- -2*beta_hat*(t[i] - control_inputs[j]) * sqExpCov1(t[i], control_inputs[j])
+  }
+}
+d_dxk_f.star_function <- function(x) {
+  d_dxk_h_xT <- matrix(rep(0,length(x)
+                   # , h2_2(x.star)
+  ), nrow = length(x), byrow = F)
+  d_dxk_f.star.bar.no_noise <<- d_dxk_h_xT %*% beta_hat +  d_dxk_t_xT %*% solve(A) %*% (nf_data_points$y - H %*% beta_hat)
+  return(d_dxk_f.star.bar.no_noise)
+}
+
+# gp1d <- data.frame(t, preds$mean, preds$lower95, preds$upper95)
+gpdev1d <- data.frame(t, d_dxk_f.star_function(t))
+
+# colnames(gp1d) <- c("x", "mean", "lower95", "upper95")
+colnames(gpdev1d) <- c("x", "derivmean")
+
+x_label <- "input, $x$"
+y_label <- "output"
+
+data_points <- data.frame(control_inputs, y)
+
+# Bounds
+y_upper <- max(abs(c(max(gpdev1d[,-1]), min(gpdev1d[,-1]))))
+y_lower <- -y_upper
+
+library(ggplot2)
+library(latex2exp) # displays latex in ggplot labels
+
+ggplot(gpdev1d, aes(x=x, y=derivmean)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf, fill="white") + 
+  geom_line(data=gpdev1d, aes(x=x,y=derivmean),colour="blue", linewidth=0.5) +
+  # geom_line(data=gp1d,aes(x=x,y=lower95), colour="blue", linewidth=0.25, linetype="dashed") +
+  # geom_line(data=gp1d,aes(x=x,y=upper95), colour="blue", linewidth=0.25, linetype="dashed") +
+  theme_bw() +
+  scale_y_continuous(lim=c(y_lower,y_upper), name=TeX(y_label)) +
+  xlab(TeX(x_label)) +
+  geom_function(fun = function(x) cos(x), colour="grey", linewidth=0.25) +
+  scale_x_continuous(breaks  = c(seq(0, 2*pi, 2*pi)),
+                    labels = c("0", TeX("$2\\pi$"))) +
+  geom_hline(yintercept=0, linewidth=0.5, colour="black")
+  # geom_point(data=data_points,aes(x=control_inputs,y=y), color="black")
+```
+
+```{r, include=F, eval=F}
+
+x <- control_inputs
+y <- simulator(control_inputs)
+
+formula <- y~0
+
+
+# model1
+
+# model2 <- km(formula=formula, design=data.frame(x=x), response=data.frame(y=y),
+#             covtype="gauss")
+# 
+# model2
+
+# Prior mean function
+h1 <- function(x) {
+  1 + 0*x
+}
+# Set up 
+l_est <- model1@covariance@range.val
+sqExpCov1 <- function(X1,X2,l=1) {
+  Sigma <- matrix(rep(0, length(X1)*length(X2)), nrow=length(X1))
+  for (i in 1:nrow(Sigma)) {
+    for (j in 1:ncol(Sigma)) {
+      Sigma[i,j] <- exp(-(sqrt((X1[i]-X2[j])^2)/l)^2/2)
+    }
+  }
+  return(Sigma)
+}
+k.xx.no_noise <- sqExpCov1(control_inputs, control_inputs) + diag(0.001, length(control_inputs))
+A <- k.xx.no_noise 
+
+# H
+H1 <- matrix(h1(control_inputs), nrow = length(control_inputs))
+H <- H1
+
+beta_hat <- model1@trend.coef
+
+# h(x)^T
+h_xT <- matrix(c(h1(x.star)
+                 # , h2_2(x.star)
+                 ), nrow = length(x.star), byrow = F)
+
+# t(x)^T
+k.xsx <- sqExpCov1(x.star, control_inputs)
+t_xT <- k.xsx
+
+f.star.bar.no_noise <- h_xT %*% beta_hat +  k.xsx %*% solve(A) %*% (nf_data_points$f - H %*% beta_hat)
+
+f.star_function <- function(x) {
+  h_xT <- matrix(c(h1(x)
+                   # , h2_2(x.star)
+  ), nrow = length(x), byrow = F)
+  t_xT <- sqExpCov1(x, control_inputs)
+  f.star.bar.no_noise <<- h_xT %*% beta_hat +  t_xT %*% solve(A) %*% (nf_data_points$f - H %*% beta_hat)
+  return(f.star.bar.no_noise)
+}
+x <- c(0,2,4)
+f.star_function(x)
+
+# Results with Universal Kriging formulae (mean and 95% intervals)
+preds <- predict(model, newdata=data.frame(x=t), type="SK")
+plot(t, preds$mean, type="l", ylim=c(min(preds$lower95),max(preds$upper95)),
+     xlab="x", ylab="y")
+abline(h=0)
+lines(t, preds$trend, col="violet", lty=2, lwd=3)
+lines(t, preds$lower95, col="black", lty=2)
+lines(t, preds$upper95, col="black", lty=2)
+points(control_inputs, y, col="red", pch=19)
+points(x, f.star.bar.no_noise, col="black", pch=19)
+
+# Derivative
+# d/dx_k [t(x)^T]
+x <- x.star
+t_xT <- sqExpCov1(x, control_inputs)
+d_dxk_t_xT <- matrix(NA, nrow = length(x), ncol = n)
+for (i in 1:length(x)) {
+  for (j in 1:n) {
+    d_dxk_t_xT[i,j] <- -2*theta*(x[i] - control_inputs[j]) * sqExpCov1(x[i], control_inputs[j])
+  }
+}
+d_dxk_f.star_function <- function(x) {
+  d_dxk_h_xT <- matrix(rep(0,length(x)
+                   # , h2_2(x.star)
+  ), nrow = length(x), byrow = F)
+  d_dxk_f.star.bar.no_noise <<- d_dxk_h_xT %*% beta_hat +  d_dxk_t_xT %*% solve(A) %*% (nf_data_points$f - H %*% beta_hat)
+  return(d_dxk_f.star.bar.no_noise)
+}
+# x <- c(0,2,4)
+d_dxk_f.star_function(x)
+
+# Results with Universal Kriging formulae (mean and 95% intervals)
+preds <- predict(model, newdata=data.frame(x=t), type="SK")
+plot(t, preds$mean, type="l", ylim=c(min(preds$lower95),max(preds$upper95)),
+     xlab="x", ylab="y")
+abline(h=0)
+lines(t, preds$trend, col="violet", lty=2, lwd=3)
+lines(t, preds$lower95, col="black", lty=2)
+lines(t, preds$upper95, col="black", lty=2)
+points(control_inputs, y, col="red", pch=19)
+points(x, d_dxk_f.star.bar.no_noise, col="black", pch=19)
+```
+
+## Alignment measure
+
+### The problem
+
+As outlined in Section 2, the alignment of two functions, that of the **constraint** function, henceforth denoted $f(.)$, with observable output denoted $y$, and the **forcing** function, henceforth denoted $h(.)$, which has as its output the unobservable variable RF, denoted $z$. We want a measure which can indicate how well observations of the output of the constraint function will constrain the unobservable output of the forcing function.
+
+The rest of this section defines the measure (Section 3.2.2), tests it on some example functions (Sections 3.2.3 and 3.2.4), and then verifies the results using simulation (Section 3.2.5). An issue identified with the measure is discussed in Section 4.
+
+
+### Specification of the measure
+
+The first attempt at the alignment measure involved the following steps:
+
+\begin{enumerate}
+\item Computation of partial derivatives -- with respect to the input parameters -- of the two response surfaces, at a discrete number of points over the input parameter uncertainty space. There will be a vector of partial derivatives for each of the points.
+\item Normalise these vectors of partial derivatives.
+\item Compute the dot product between corresponding pairs of vectors and take the absolute values.
+\item Take the mean of the dot products.
+\item Check how close this mean is to 1.
+\end{enumerate}
+
+
+### Two-dimensional input space and curved response surface example
+
+The function against which the others will be compared is:
+$$
+h(x_1, x_2) = \sqrt{100 - x_1^2 - x_2^2}
+$$
+which has the following partial derivatives:
+$$
+\frac{\partial h(x_1, x_2)}{\partial x_1} =
+-\frac{x_1}{\sqrt{100 - x_1^2 - x_2^2}} \;\;\;\;\;\;\;\;
+\frac{\partial h(x_1, x_2)}{\partial x_2} =
+-\frac{x_2}{\sqrt{100 - x_1^2 - x_2^2}}
+$$
+The slope field containing the vector
+$\begin{bmatrix}
+  \dfrac{\partial h(x_1, x_2)}{\partial x_1} \\
+  \dfrac{\partial h(x_1, x_2)}{\partial x_2}
+\end{bmatrix}$
+evaluated at 36 equally-spaced points $(x_1, x_2)$ for which $x_1, x_2 \in \{0, 1, \dots, 5\}$ is shown in Figure 6. Note, each vector's starting point is the point $(x_1, x_2)$ at which it was evaluated.
+```{r curved-sf-for-h, out.width="40%", echo=F, fig.cap="Slope field for the function $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$.", warning=F}
+knitr::include_graphics("figures/curved-sf-and-cp-for-h-1.pdf")
+```
+
+Figures 7-10 show the value of the alignment measure for various shifted versions of the function $h$, denoted $f$ in each case, along with the reprinted contour plot of $h$ (figures on the left) and of each $f$ (figures on the right).
+
+```{r alignment-measure-097, fig.show="hold", out.width=c("25%","25%"), echo=F, fig.cap="Contour plots of $h$ and $f = \\sqrt{100 - x_1^2 - x_2^2}$; alignment measure 0.97.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/alignment-measure-097-1.pdf","figures/alignment-measure-097-2.pdf"))
+```
+
+\vspace{-0.25cm}
+
+```{r alignment-measure-062, fig.show="hold", out.width=c("25%","25%"), echo=F, fig.cap="Contour plots of $h$ and $f = \\sqrt{100 - (x_1-2.5)^2 - (x_2-2.5)^2}$; alignment measure 0.62.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/alignment-measure-062-1.pdf","figures/alignment-measure-062-2.pdf"))
+```
+
+\vspace{-0.25cm}
+
+```{r alignment-measure-056, fig.show="hold", out.width=c("25%","25%"), echo=F, fig.cap="Contour plots of $h$ and $f = \\sqrt{100 - (x_1-5)^2 - (x_2-5)^2}$; alignment measure 0.56.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/alignment-measure-056-1.pdf","figures/alignment-measure-056-2.pdf"))
+```
+
+\vspace{-0.25cm}
+
+```{r alignment-measure-048-1, fig.show="hold", out.width=c("25%","25%"), echo=F, fig.cap="Contour plots of $h$ and $f = \\sqrt{100 - (x_1-5)^2 - x_2^2}$; alignment measure 0.48.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/alignment-measure-048-1-1.pdf","figures/alignment-measure-048-1-2.pdf"))
+```
+
+As should be expected, when we have perfect alignment between the slope fields of the two functions (Figure 7) we get a number (extremely) close to 1 -- the only reason this is not exactly 1 is that at $(0,0)$, the dot product taken is between two zero vectors.
+
+As we move to cases of greater orthogonality between pairs of vectors, the measure drops -- see for example the top left and bottom right regions of Figures 8 (a) and (b) and Figures 9 (a) and (b), and the top right and bottom of Figures 10 (a) and (b).
+
+### Two-dimensional input space and planar response surface example
+
+To ensure that entirely orthogonal surfaces would result in an alignment measure close to 0, and to investigate whether the measure is affected by varying gradients of otherwise identical surfaces, the steps in Section 3.2.3 were repeated using planar surfaces. The function against which the others will be compared is: $$h(x_1, x_2) = x_1 + x_2$$ which has partial derivatives $$\frac{\partial h(x_1, x_2)}{\partial x_1} = 1 \;\;\;\;\;\;\;\; \frac{\partial h(x_1, x_2)}{\partial x_2} = 1.$$ The slope field containing the vector
+$\begin{bmatrix}
+  \dfrac{\partial h(x_1, x_2)}{\partial x_1} \\
+  \dfrac{\partial h(x_1, x_2)}{\partial x_2}
+\end{bmatrix}$
+evaluated at 36 equally-spaced points $(x_1, x_2)$ for which $x_1, x_2 \in \{0, 1, \dots, 5\}$ is shown in Figure 11. Again, each vector's starting point is the point $(x_1, x_2)$ at which it was evaluated.
+
+```{r planar-sf-for-h, out.width="30%", echo=F, fig.cap="Slope field for the function $h(x_1, x_2) = x_1 + x_2$.", warning=F}
+knitr::include_graphics("figures/flat-plane-sf-and-cp-for-h-1.pdf")
+```
+
+Figures 12-14 show the value of the alignment measure for various transformations of the function $h$, denoted $f$ in each case, along with the reprinted contour plot of $h$ (figures on the left) and of each $f$ (figures on the right).
+
+```{r alignment-measure-100-1, fig.show="hold", out.width=c("25%","25%"), echo=F, fig.cap="Contour plots of identical functions $h$ and $f(x_1, x_2) = x_1 + x_2$; alignment measure 1.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/alignment-measure-100-1-1.pdf","figures/alignment-measure-100-1-2.pdf"))
+```
+
+\vspace{-0.25cm}
+
+```{r alignment-measure-100-2, fig.show="hold", out.width=c("25%","25%"), echo=F, fig.cap="Contour plots of $h$ and $f(x_1, x_2) = 2x_1 + 2x_2$, two functions identical except for their gradients; alignment measure 1.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/alignment-measure-100-2-1.pdf","figures/alignment-measure-100-2-2.pdf"))
+```
+
+\vspace{-0.25cm}
+
+```{r alignment-measure-000, fig.show="hold", out.width=c("25%","25%"), echo=F, fig.cap="Contour plots of orthonogal planes $h$ and $f(x_1, x_2) = -x_1 + x_2$; alignment measure 0.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/alignment-measure-000-1.pdf","figures/alignment-measure-000-2.pdf"))
+```
+
+Once again, when the two slope fields are perfectly aligned (Figure 12), the measure is close to 1; here, exactly 1. In Figure 13, the two planes differ only in their gradients (see the labels on the level curves), and have identical values of the alignment measure. The measure fails to recognise this difference -- see Section 4 for a note on this. In Figure 14, the two functions are orthogonal to each other at every point, and the measure captures this by returning a value of 0.
+
+### Verification of 2D examples using simulation
+
+If the measure specified in Section 3.2.2 performs as we'd hope, we should see that lower values of the measure obtained in Sections 3.2.3 and 3.2.4 correspond to a less effective constraining of the variable $z$ using simulation methods. The process used is the following:
+
+1. Assume a uniform prior distribution for both $x_1$ and $x_2$, both over $[0, 5]$ (to match the measures and plots in Sections 3.2.3 and 3.2.4). Corresponding prior distributions for $y$ and $z$ can be found by evaluation $f$ and $h$ respectively at a large number of points sampled from the joint prior for $x_1$ and $x_2$.
+
+2. Produce $n$ observations of $y$, with corresponding input settings $\left\{(x_{1,1}, x_{2,1}), \dots, (x_{1,n}, x_{2,n})\right\}$, with added random noise (to represent observation error) sampled from an N$(0, 0.1^2)$ distribution. The observations are denoted $\{\tilde{y}_1, \dots, \tilde{y}_n\}$.
+
+3. Use \texttt{rstan} [@stan24], an \texttt{R} package that implements full Bayesian statistical inference by way of Markov Chain Monte Carlo, to produce posterior draws of $x_1$ and $x_2$, and corresponding values of $y$ and $z$.
+
+4. Have the observations $\{\tilde{y}_1, \dots, \tilde{y}_n\}$ constrained both $y$ and $z$, or just $y$?
+
+The steps are conducted for both versions of $h$ in previous sections. In Step 1, to visualise approximate prior distributions of both $y$ and $z$, a sample of $1 \times 10^9$ points are sampled from the joint prior of $x_1$ and $x_2$ and the functions $f$ and $h$ are evaluated respectively -- this sample is large but computationally quick to compute and gives a very clear estimate of the prior distributions. In Step 2, a single observation ($n=1$) was generated, each time at $(x_1, x_2) = (2, 2)$. In Step 3, the output from the \texttt{rstan} run is checked in each case to ensure Markov chain convergence. A sample of 5000 points are sampled from the joint posterior of $x_1$ and $x_2$, and the functions $f$ and $h$ again evaluated respectively to visualise the approximate posterior distributions of both $y$ and $z$.
+
+When the constraint function has the form shown in Figure 7(b), which had an alignment measure of 0.97 with the forcing function, the posterior distribution of both $y$ and $z$ has been constrained, with their ranges both decreasing by 76% (Figures 15 and 16).
+
+```{r curved-y-prior-post-comp-097, fig.show="hold", out.width=c("49%","49%"), echo=F, fig.cap="Prior (a) and posterior (b) draws of $y$, the output of $f(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/curved-y-prior-post-comp-097-1.pdf","figures/curved-y-prior-post-comp-097-2.pdf"))
+```
+
+\vspace{-0.25cm}
+
+```{r z-prior-post-comp-097, fig.show="hold", out.width=c("49%","49%"), echo=F, fig.cap="Prior (a) and posterior (b) draws of $z$, the output of $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$, when $f(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/z-prior-post-comp-097-1.pdf","figures/z-prior-post-comp-097-2.pdf"))
+```
+
+For the function whose contour plot was shown in Figure 10(b), with an alignment measure of 0.48, the estimated prior and posterior distributions are similar to those of Figure 16, and those for $h$ are shown in Figure 17. The posterior distribution of the unobserved output $z$ has been far less constrained then that of the observed output $y$, with the range of the former dropping by 18% compared to the latter's 76% decrease.
+
+```{r z-prior-post-comp-048, fig.show="hold", out.width=c("49%","49%"), echo=F, fig.cap="Prior (a) and posterior (b) of $z$, the output of $h(x_1, x_2) = \\sqrt{100 - x_1^2 - x_2^2}$, when $f(x_1, x_2) = \\sqrt{100 - (x_1-5)^2 - x_2^2}$.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/z-prior-post-comp-048-1.pdf","figures/z-prior-post-comp-048-2.pdf"))
+```
+
+Figures 15 and 16 are replicated in Figures 18 and 19 for the pair of orthogonal planar surfaces whose contour plots were shown in Figure 14 and which had an alignment measure of 0. The posterior distribution of the observed output $y$ has been dramatically constrained, with its range dropping by 93%, whereas that of the unobserved output $z$ has decreased by less than half a percent (0.44%).
+
+```{r planar-y-prior-post-comp-000, fig.show="hold", out.width=c("49%","49%"), echo=F, fig.cap="Prior (a) and posterior (b) draws of $y$, the output of $f(x_1, x_2) = - x_1 + x_2$.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/flat-plane-y-prior-post-comp-000-1.pdf","figures/flat-plane-y-prior-post-comp-000-2.pdf"))
+```
+
+\vspace{-0.25cm}
+
+```{r z-prior-post-comp-000, fig.show="hold", out.width=c("49%","49%"), echo=F, fig.cap="Prior (a) and posterior (b) draws of $z$, the output of $h(x_1, x_2) = x_1 + x_2$, when $f(x_1, x_2) = - x_1 + x_2$.", fig.subcap=c('', ''), warning=F}
+knitr::include_graphics(c("figures/z-prior-post-comp-000-1.pdf","figures/z-prior-post-comp-000-2.pdf"))
+```
+
+
+# Further work
+
+In this section I set out my planned course of work over the next year and beyond, giving approximate months in which the work will be done. Note that some of the tasks run concurrently.
+
+**February--July 2025**
+\newline
+Further work on the alignment measure will be carried out. This will include:
+
+- The measure failed to notice the difference in gradients between the pair of functions shown in Figure 13. Whether or not this matters will be checked through simulation.
+
+- As seen in Section 3, with the observation at $(x_1, x_2) = (2, 2)$ the measure matched well with the extent of constraining achieved via simulation. However, when moved to $(x_1, x_2) = (4.9, 0.1)$, excellent constraining was achieved for the pair of functions shown in Figure 14, for which the alignment measure was 0. This appears to have been because the plausible input space was shrunk as a result of the observation being in the corner of the input space. This suggests that the measure, as detailed in Section 3.2.2, needs to take into account the location in input space -- and associated reduction in this space -- corresponding to an observation of the constraint variable.
+
+- As and when the issue discussed in the previous point has been rectified, and the alignment measure appears to be working well in simple cases like those explored in Section 3, I will apply it to more complicated test functions with two-dimensional input spaces, such as the Branin, Camelback and Goldstein-Price functions, which contain various local extrema. The measure will again be checked against simulation, as in Section 3.2.5.
+
+- Since a GP will be used in place of the simulator, the performance of the alignment measure on the GPs of a pair of unknown functions will need to be tested. In all future work on the alignment measure, the functions used will be GPs of (known but assumed unknown) functions.
+
+- If the alignment measure appears to be performing well on these more complex cases with two-dimensional input spaces, I will apply to higher dimensional input spaces and again verify that it is doing what it should be doing using simulation. For the climate models I will be looking at in this project, SA can result in around 8-10 inputs being identified as of interest, so this will be the order of dimension aimed for. There will no doubt be issues with the measure not yet foreseen, and attempts will need to be made to overcome these.
+
+
+\noindent
+**February--April 2025**
+\newline
+\newline
+I will attempt to deepen my understanding of GPs:
+
+- A formula for the posterior mean function of the derivative of a simulator was given by (\ref{eqn:postrderivmf}) and a prediction made for what form this should take. Verification of this will be attempted. I also need to understand whether CIs for the derivative at the training points are zero, as with the GPs for the function.
+
+- I will find 95% CIs for the posterior mean function of the derivative of a simulator, to match those found for the posterior mean function of a simulator shown in Figure 5.
+
+- The building, verification and use of emulators for functions of two, then three, and then 26 (the latter to match the typical climate model I will be looking at). The derivatives of these will also be attempted to be found, up to 8-10 dimensions for the same reason given above.
+
+
+\noindent
+**May--June 2025**
+\newline
+\newline
+I will spend time reading about history matching, using the paper by @craig97 in which the approach was first detailed as well as the tutorial by @andrianakis15, then moving onto the paper by @williamson13, the first to apply the approach to a climate-based setting.
+
+To attempt to overcome issues detailed in my Learning Support Plan among others (dyslexia, perfectionist tendencies, suspected attention deficit disorder), the university PGR group mentoring sessions I attend have thrown up the suggestion of *writing exams* where, having read literature on a particular topic, the student sets themselves a 2- or 3-hour long open-book 'exam' in which they write up their understanding of the topic. The resulting piece of work is then sent to their supervisors, with the fact being noted that it was written in timed conditions, and is 'marked' for accuracy and understanding of the topic. My supervisors are open to this idea, and I plan for history matching to be my first topic to try this with. If successful, I will repeat this with another topic, possibly **model calibration**.
+
+
+\noindent
+**June--December 2025**
+\newline
+\newline
+In line with my Data Management Plan, I will start to access and work with the climate data that the main methods using this project will be applied. I will be granted access to the PPE (perturbed parameter ensemble) of the UKESM1 (UK Earth System Model 1) created in the NERC (Natural Environment Research Council) A-CURE (Aerosol-Cloud Uncertainty Reduction) project [PPE accessible at @regayre21; see paper @regayre23]. The ensemble data is stored on the NERC HPC (high performance computer) JASMIN facility, which I will also be granted access to. I will also be able to make use of observed data which was collated via the NERC GASSP (Global Aerosol Synthesis and Science Project), which contains both satellite and 'in-situ' observations). The data will be mostly in NetCDFs (network Common Data Form), so first off I will get accustomed to working with this data format, before starting to build gridded GPs for the simulator's global outputs and applying the methods of the derivatives of GPs and the alignment measure described earlier to real-life data. In particular, it will interesting to find out how reducing the number of dimensions of the input space (through SA) affects the alignment measure.
+
+
+\noindent
+**January--April 2026**
+\newline
+\newline
+The identification of the reliance of the alignment on the location, in the input space, of the observation will mean that an analysis of the predictive power of the measure, dependent on this location will need to be development. Questions such as which observations will feed through to successfully constraint and some, possibly localised, summary of how much constraining will be possible should be aimed for.
+
+Up to now the alignment measure will have been applied once SA has reduced the dimension of the input space. Could the measure been applied *before* SA, in order to ensure post-SA alignment? How will this affect the results of SA?
+
+By now I should have completed a literature review of model calibration, and I will need to start incorporating modelling model discrepancy whenever fitting a GP, and this is an important source of uncertainty in climate science.
+
+
+# Other relevant info 
+
+I have dyslexia and have a disability advisor how is helping me obtain Disabled Students' Allowance and study skills sessions. Perfectionist tendencies led to problems with my MSc dissertation, and I've been working with my advisor (Paul Blackwell) who's advised me  to avoid 'premature optimisation' -- obsessing over code or text without certainty that it's making it into a finished (and important) piece of work.
+
+In February 2025 I have a diagnostic appointment for suspected A.D.D. (attention deficit disorder), and a needs assessment for additional technology and support (hopefully including a disability mentor).
+
+I've moved offices since I started the PhD, and am finding I am able to be more focussed and productive in the setting.
+
+# Citations
