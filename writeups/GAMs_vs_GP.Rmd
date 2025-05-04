@@ -1,0 +1,326 @@
+---
+title: "GAMs versus GPs"
+output: pdf_document
+date: ""
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(sensitivity)
+library(DiceKriging)
+library(BBmisc) # for the normalize function
+```
+
+# GP approach (from [Doug McNeall's vignette](https://uq4covid.github.io/vignettes/metawards_sa))
+
+```{r, echo=F}
+design_file = 'https://raw.githubusercontent.com/dougmcneall/covid/master/experiments/2020-05-07-sensitivity-analysis/design.csv'
+X <- read.csv(design_file, sep = "")
+parnames = colnames(X)
+```
+
+A container for all the data 
+Each row has a "fingerprint" that contains the values of all the changed parameters, and the values of the parameters are also given.  This alters the order of the parameters.
+
+```{r, eval=F}
+dat <- read.csv('results.csv.bz2')
+
+unique_fingerprint = unique(dat$fingerprint)
+
+# find maximum number of infections for each ensemble member
+max_infections <- dat %>% 
+                  group_by(fingerprint) %>%
+                  summarize(max(I))
+
+reorder_ix <- match(unique_fingerprint, max_infections$fingerprint)
+max_infections <- max_infections[reorder_ix, ]
+
+head(max_infections)
+```
+
+```{r, include=F}
+dat <- read.csv('../data/results.csv.bz2')
+
+unique_fingerprint = unique(dat$fingerprint)
+
+# find maximum number of infections for each ensemble member
+max_infections <- dat %>% 
+                  group_by(fingerprint) %>%
+                  summarize(max(I))
+
+reorder_ix <- match(unique_fingerprint, max_infections$fingerprint)
+max_infections <- max_infections[reorder_ix, ]
+
+head(max_infections)
+```
+
+Plot each parameter against the output to get an idea of sensitivity
+
+```{r}
+d <- ncol(X)
+X.norm <- normalize(X)
+y <- pull(max_infections,'max(I)')
+X %>% 
+  as_tibble %>% 
+  mutate(y=y) %>% 
+  gather('parameter', 'value', -y) %>% 
+  ggplot(aes(x=value, y=y)) + 
+    geom_point() + 
+    facet_wrap(~parameter) +
+    labs(y='output', x='input')
+```
+
+## Fit an emulator using DiceKriging.
+
+```{r, eval=F}
+fit = km(~., design=X.norm, response=y)
+```
+
+```{r, include=F}
+fit = km(~., design=X.norm, response=y)
+```
+
+Perform Leave-one-out cross validation of the fitted emulator
+
+```{r}
+loo = leaveOneOut.km(fit, type = 'UK', trend.reestim = TRUE)
+
+tibble(y=y, em_mean=loo$mean, em_sd = loo$sd) %>%
+  ggplot() + 
+  geom_segment(aes(x=y, xend=y, y=em_mean - 2*em_sd, yend=em_mean + 2*em_sd)) +
+  geom_point(aes(x=y, y=em_mean)) +
+  geom_abline(intercept=-1, slope=1, lty=2) +
+  labs(x='max. infections', y='emulator output')
+```
+
+Perform a FAST99 sensitivity analysis (cf. Saltelli et al (1999))
+
+1. First, generate a design for the FAST99 analysis:
+
+```{r}
+X.fast <- fast99(model = NULL, factors = colnames(X), n = 3000,
+                 q = "qunif", q.arg = list(min = 0, max = 1))
+```
+
+2. Predict the response at the FAST99 design points using the emulator (where `fit` is the `km` object created above):
+
+```{r}
+pred.fast = predict(fit, newdata = X.fast$X, type = 'UK')
+```
+
+3. Calculate the sensitivity indices:
+
+```{r}
+fast.tell <- tell(X.fast, pred.fast$mean)
+```
+
+4. Get the FAST summary into an easier format for barplot:
+
+```{r}
+bp.convert <- function(fastmodel){
+  fast.summ <- print(fastmodel)
+  fast.diff <- fast.summ[ ,2] - fast.summ[ ,1]
+  fast.bp <- t(cbind(fast.summ[ ,1], fast.diff))
+  fast.bp
+}
+```
+
+5. Barplots:
+
+```{r, eval=F}
+par(las = 2, mar = c(9,5,3,2))
+plot_data <- bp.convert(fast.tell)
+```
+
+```{r, include=F}
+par(las = 2, mar = c(9,5,3,2))
+plot_data <- bp.convert(fast.tell)
+```
+
+```{r, message=F}
+barplot(plot_data, col = c('skyblue', 'grey'), 
+        ylab = 'relative sensitivity', 
+	main = 'FAST99 Sensitivity',
+	ylim = c(0,1))
+```
+
+## One-at-a-time sensitivity analysis
+
+Parameters are swept across their range one at a time, with the remaining parameters held at central values.
+
+```{r}
+n.oat <- 21
+
+oaat.design <- function(design, n, med = TRUE, hold = NULL){
+# function for creating one-at-a-time design matrix
+# INPUTS:
+# design .... original design (e.g. a latin hypercube or output from expand.grid)
+# n ......... number of design points in each dimension 
+# med ....... Use median rather than mean?
+# hold ...... Use supplied value to hold the non-changing points
+#  
+# OUTPUTS:
+# ........... (n x nd) rows, nd columns design matrix, sweeping through parameter space
+  
+oamat <- NULL
+
+nd <- ncol(design)
+
+
+if(med){
+	meandes <- apply(design,2,median)	
+	}
+	
+else{
+	meandes <- apply(design,2,mean)
+	}
+	
+if(is.null(hold) == FALSE){
+	
+	meandes <- hold
+}
+
+	
+mindes <- apply(design,2,min)
+maxdes <- apply(design,2,max)
+
+for (j in 1:nd){
+  # base matrix of 'best' values to put the sweep values into
+  basemat <- matrix(meandes, nrow = n, ncol = nd , byrow = TRUE)
+  # use seq and length.out
+  vec <- seq(from = mindes[j], to = maxdes[j], length.out = n)
+  basemat[ ,j] <- vec
+  oamat <- rbind(oamat,basemat)
+  
+  }
+
+oamat
+
+}
+
+X.oat <- oaat.design(X.norm, n = n.oat, hold = rep(0.5,9))
+
+colnames(X.oat) <- colnames(X)
+pred.oat <- predict(fit, newdata = X.oat, type = 'UK')
+```
+
+```{r, fig.height=7}
+params = rep(colnames(X.oat), each=n.oat)
+col_inds = rep(1:ncol(X.oat), each=n.oat)
+tibble(parameter = params,
+       value = X.oat[cbind(1:length(col_inds), col_inds)]) %>% 
+  mutate(pred_mean=pred.oat$mean, 
+	 pred_sd=pred.oat$sd,
+	 lwr = pred_mean - 2 * pred_sd,
+	 upr = pred_mean + 2 * pred_sd) %>% 
+  ggplot(aes(x=value)) + 
+    geom_ribbon(aes(ymin=lwr, ymax=upr), fill='gray') + 
+    geom_line(aes(y=pred_mean)) + 
+    facet_wrap(~parameter) +
+    labs(x='Parameter value', y='Max. no. of Infections (emulator mean +/- 2 stdev)')
+```
+
+# GAM approach (from [Jeremy Oakley's vignette](https://uq4covid.github.io/vignettes/SensitivityAnalysisWithGAM))
+
+## Training data
+
+Same inputs and output as Doug's, plus a dummy input that we know has no effect on the output:
+
+```{r}
+set.seed(123)
+X$dummy <- runif(90)
+```
+
+Outputs will be stored in a vector y
+
+```{r}
+y <- pull(max_infections,'max(I)')
+```
+
+Similar to Doug's one-at-a-time SA, except that we're averaging over the other inputs, as each input sweeps across its range:
+
+```{r}
+cbind(X, y) %>%
+  ggplot(aes(x = beta.2., y = y)) +
+  geom_point(alpha = 0.5) + 
+   geom_smooth(method = mgcv::gam,
+               formula = y ~ s(x, bs = "tp"),
+               fill = "red",
+               method.args = list(method="GCV.Cp"))
+```
+
+For all inputs:
+
+```{r, fig.height=7}
+X %>% 
+  as_tibble %>% 
+  mutate(y=y) %>% 
+  gather('parameter', 'value', -y) %>% 
+  ggplot(aes(x=value, y=y)) + 
+    geom_point(alpha = 0.5) + 
+    facet_wrap(~parameter) +
+    labs(y='output', x='input') +
+  geom_smooth(method = mgcv::gam,
+               formula = y ~ s(x, bs = "tp"),
+               fill = "red",
+               method.args = list(method="GCV.Cp"))
+```
+
+Calculating the main effect index:
+
+```{r}
+gam1 <- mgcv::gam(y ~ s(X[, 1]))
+var(gam1$fitted) / var(y)
+```
+
+```{r}
+mainEffects <- rep(0, 10)
+for(i in 1:10){
+  gam1 <- mgcv::gam(y ~ s(X[, i]))
+  mainEffects[i] <- var(gam1$fitted) / var(y)
+}
+rotate_x <- function(data, column_to_plot, labels_vec, rot_angle) {
+    plt <- barplot(data[[column_to_plot]], col='steelblue', xaxt="n")
+    text(plt, par("usr")[3], labels = labels_vec, srt = rot_angle, adj = c(1.1,1.1), xpd = TRUE, cex=0.6) 
+}
+mainEffects_df <- data.frame(mainEffects)
+rotate_x(mainEffects_df, 'mainEffects', colnames(X), 45)
+```
+
+```{r}
+sum(mainEffects)
+```
+
+```{r}
+gam1 <- mgcv::gam(y ~ te(X[, 1], X[, 2]))
+var(gam1$fitted)/var(y) - mainEffects[1] - mainEffects[2]
+length(gam1$coefficients)
+```
+
+```{r}
+predict(gam1, type = "lpmatrix")
+```
+
+```{r}
+vcov(gam1)
+```
+
+```{r}
+set.seed(123)
+nReps <- 10000
+mE <- matrix(0, nReps, 10)
+i <- 6
+for(i in 1:ncol(mE)){
+  gam1 <- mgcv::gam(y ~ s(X[, i]))
+  p1 <- predict(gam1, type = "lpmatrix")
+  rFitted <- mgcv::rmvn(nReps, 
+                        as.numeric(p1 %*% matrix(coef(gam1),
+                                                 ncol = 1)),
+                        p1 %*% vcov(gam1) %*% t(p1))
+  mE[, i] <- apply(rFitted, 1, var) / var(y)
+}
+```
+
