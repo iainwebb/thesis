@@ -16,8 +16,9 @@
 # dim(abs(partial_derivatives_normalised_response_surface_1_dataframe * partial_derivatives_normalised_response_surface_2_dataframe))
 
 # START ------
+setwd("U:/ManWin/My Documents/thesis")
 rm(list = ls())
-calcs <- 10
+calcs <- 1
 
 library(ncdf4)
 library(DiceKriging)
@@ -58,7 +59,7 @@ sq_exp_cov_function <- function(matrix_1, matrix_2, l = l_hat_diag_matrix){
   return(cov_matrix)
 }
 # define x_star  ---------------------------
-N <- 200000
+N <- 20
 x_star_matrix <- t(randomLHS(N, p))
 # x_star_matrix <- t(read.csv("data/x_norm_matrix.csv", header = FALSE, sep = ""))[,sample(1:200000, 10000)]
 N <- ncol(x_star_matrix)
@@ -67,7 +68,7 @@ colnames(x_star_T_dataframe) <- paste0(rep("x.",p), 1:p)
 # make H_matrix
 H_matrix <- cbind(c(rep(1, n)), t(unname(x_norm_matrix)))
 
-gridboxes <- matrix(c(100, 85, 100, 85), nrow = 2, byrow = T)
+gridboxes <- matrix(c(20, 120, 20, 120), nrow = 2, byrow = T)
 # gridboxes <- matrix(c(100, 85, 20, 120), nrow = 2, byrow = T)
 
 for (c in 1:calcs) {
@@ -134,48 +135,54 @@ for (c in 1:calcs) {
   
   AM <- sum(abs(rowSums(partial_derivatives_normalised_response_surface_1_dataframe * partial_derivatives_normalised_response_surface_2_dataframe))) / N
   
-  assign(paste0("AM_with_", N, "_attempt_", c), AM)
+  # assign(paste0("AM_with_", N, "_attempt_", c), AM)
+  write(AM, 
+        file=paste0("R/land_with_itself_", 
+                    gridboxes[1,1], "_", gridboxes[1,2], "_", 
+                    gridboxes[2,1], "_", gridboxes[2,2],
+                    "_AM_", N, "_pts_", p, "_pars.txt"),append=TRUE)
+  write(AM, 
+        file=paste0("R/land_with_itself_", 
+                    gridboxes[1,1], "_", gridboxes[1,2], "_", 
+                    gridboxes[2,1], "_", gridboxes[2,2],
+                    "_all_", N, "_pts_", p, "_pars.txt"),append=TRUE)
+  write(print(eval(parse(text = paste0("betas_with_", N, "_gb_", 1, "_attempt_", c)))), 
+        file=paste0("R/land_with_itself_", 
+                    gridboxes[1,1], "_", gridboxes[1,2], "_", 
+                    gridboxes[2,1], "_", gridboxes[2,2],
+                    "_all_", N, "_pts_", p, "_pars.txt"),append=TRUE)
+  write(print(eval(parse(text = paste0("betas_with_", N, "_gb_", 2, "_attempt_", c)))), 
+        file=paste0("R/land_with_itself_", 
+                    gridboxes[1,1], "_", gridboxes[1,2], "_", 
+                    gridboxes[2,1], "_", gridboxes[2,2],
+                    "_all_", N, "_pts_", p, "_pars.txt"),append=TRUE)
+  write(print(eval(parse(text = paste0("l_hat_with_", N, "_gb_", 1, "_attempt_", c)))), 
+        file=paste0("R/land_with_itself_", 
+                    gridboxes[1,1], "_", gridboxes[1,2], "_", 
+                    gridboxes[2,1], "_", gridboxes[2,2],
+                    "_all_", N, "_pts_", p, "_pars.txt"),append=TRUE)
+  write(print(eval(parse(text = paste0("l_hat_with_", N, "_gb_", 2, "_attempt_", c)))), 
+        file=paste0("R/land_with_itself_", 
+                    gridboxes[1,1], "_", gridboxes[1,2], "_", 
+                    gridboxes[2,1], "_", gridboxes[2,2],
+                    "_all_", N, "_pts_", p, "_pars.txt"),append=TRUE)
   
   end_time <- Sys.time()
   
-  assign(paste0("time_with_", N, "_attempt_", c), end_time - start_time)
+  # assign(paste0("time_with_", N, "_attempt_", c), end_time - start_time)
+  
 }
 
-for (c in 1:calcs) {
-  print(eval(parse(text = paste0("AM_with_", N, "_attempt_", c))))
-  print(eval(parse(text = paste0("betas_with_", N, "_gb_", 1, "_attempt_", c))))
-  print(eval(parse(text = paste0("betas_with_", N, "_gb_", 2, "_attempt_", c))))
-  print(eval(parse(text = paste0("l_hat_with_", N, "_gb_", 1, "_attempt_", c))))
-  print(eval(parse(text = paste0("l_hat_with_", N, "_gb_", 2, "_attempt_", c))))
-}
-
-for (c in 1:calcs) {
-  print(eval(parse(text = paste0("time_with_", N, "_attempt_", c))))
-}
-
-print(c(p, N))
-
-low_AMs <- 0
-for (c in 1:calcs) {
-  low_AMs <- low_AMs + as.numeric(eval(parse(text = paste0("AM_with_", N, "_attempt_", c))) < 0.999)
-}
-low_AMs / c
-
-very_low_AMs <- 0
-for (c in 1:calcs) {
-  very_low_AMs <- very_low_AMs + as.numeric(eval(parse(text = paste0("AM_with_", N, "_attempt_", c))) < 0.9)
-}
-very_low_AMs / c
-
-sum(abs(rowSums(partial_derivatives_normalised_response_surface_1_dataframe * partial_derivatives_normalised_response_surface_2_dataframe)) >= 0)
-
-par(mfrow = c(1, 1))
-hist(abs(rowSums(partial_derivatives_normalised_response_surface_1_dataframe * partial_derivatives_normalised_response_surface_2_dataframe)))
-
-for (i in 1:p) {
-  par(mfrow = c(1, 2))
-  hist(partial_derivatives_normalised_response_surface_1_dataframe[,i])
-  hist(partial_derivatives_normalised_response_surface_2_dataframe[,i])
-}
-
-write.csv(x_star_predictions_list$mean, file = "data/x_star_predictions_1.csv", row.names = F)
+# for (c in 1:calcs) {
+#   print(eval(parse(text = paste0("AM_with_", N, "_attempt_", c))))
+#   print(eval(parse(text = paste0("betas_with_", N, "_gb_", 1, "_attempt_", c))))
+#   print(eval(parse(text = paste0("betas_with_", N, "_gb_", 2, "_attempt_", c))))
+#   print(eval(parse(text = paste0("l_hat_with_", N, "_gb_", 1, "_attempt_", c))))
+#   print(eval(parse(text = paste0("l_hat_with_", N, "_gb_", 2, "_attempt_", c))))
+# }
+# 
+# for (c in 1:calcs) {
+#   print(eval(parse(text = paste0("time_with_", N, "_attempt_", c))))
+# }
+# 
+# print(c(p, N))
