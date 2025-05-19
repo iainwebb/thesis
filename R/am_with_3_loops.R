@@ -23,7 +23,7 @@ library(ncdf4)
 library(DiceKriging)
 library(lhs)
 
-JDO_jul <- nc_open(paste("C:/Users/smp22ijw/Downloads/ACURE_P3_AOD_Total_jul.nc"))
+JDO_jul <- nc_open(paste("data/ACURE_P3_AOD_Total_jul.nc"))
 JDO_jul <- ncvar_get(JDO_jul, names(JDO_jul$var))
 AODs_Total_jul_level2 <- JDO_jul[,,2,]
 
@@ -32,7 +32,8 @@ AODs_Total_jul_level2 <- JDO_jul[,,2,]
 # SETUP
 # specify the inputs ----------------------
 # x_norm_T_matrix <- read.csv("X:/johnson_group/Aerosol-MFR/A-CURE-UKESM1-PPE-Data/Design/ACURE-UKESM1-PPE-par-norm-Design.csv")
-x_norm_T_matrix <- read.csv("C:/Users/smp22ijw/Downloads/ACURE-UKESM1-PPE-par-norm-Design.csv")[,1:4]
+x_norm_T_matrix <- read.csv("data/ACURE-UKESM1-PPE-par-norm-Design.csv")
+#                                                                       [,1:4]
 x_norm_matrix <- t(x_norm_T_matrix)
 p <- ncol(x_norm_T_matrix)
 colnames(x_norm_T_matrix) <- paste0(rep("x.",p), 1:p)
@@ -57,9 +58,9 @@ sq_exp_cov_function <- function(matrix_1, matrix_2, l = l_hat_diag_matrix){
   return(cov_matrix)
 }
 # define x_star  ---------------------------
-# N <- 5000
-# x_star_matrix <- t(maximinLHS(N, p))
-x_star_matrix <- t(read.csv("C:/Users/smp22ijw/Downloads/x_norm_matrix.csv", header = FALSE, sep = ""))[,sample(1:200000, 100000)]
+N <- 200000
+x_star_matrix <- t(randomLHS(N, p))
+# x_star_matrix <- t(read.csv("data/x_norm_matrix.csv", header = FALSE, sep = ""))[,sample(1:200000, 10000)]
 N <- ncol(x_star_matrix)
 x_star_T_dataframe <- data.frame(t(x_star_matrix))
 colnames(x_star_T_dataframe) <- paste0(rep("x.",p), 1:p)
@@ -93,6 +94,7 @@ for (c in 1:calcs) {
                            nrow = p)
     l_hat_diag_matrix <- diag(as.vector(l_hat_matrix))
     assign(paste0("betas_with_", N, "_gb_", g, "_attempt_", c), f_GP@trend.coef)
+    assign(paste0("l_hat_with_", N, "_gb_", g, "_attempt_", c), f_GP@covariance@range.val)
     
     # DERIVATIVE WORK
     # predict at x_star values using GP --------
@@ -143,6 +145,8 @@ for (c in 1:calcs) {
   print(eval(parse(text = paste0("AM_with_", N, "_attempt_", c))))
   print(eval(parse(text = paste0("betas_with_", N, "_gb_", 1, "_attempt_", c))))
   print(eval(parse(text = paste0("betas_with_", N, "_gb_", 2, "_attempt_", c))))
+  print(eval(parse(text = paste0("l_hat_with_", N, "_gb_", 1, "_attempt_", c))))
+  print(eval(parse(text = paste0("l_hat_with_", N, "_gb_", 2, "_attempt_", c))))
 }
 
 for (c in 1:calcs) {
@@ -173,3 +177,5 @@ for (i in 1:p) {
   hist(partial_derivatives_normalised_response_surface_1_dataframe[,i])
   hist(partial_derivatives_normalised_response_surface_2_dataframe[,i])
 }
+
+write.csv(x_star_predictions_list$mean, file = "data/x_star_predictions_1.csv", row.names = F)
