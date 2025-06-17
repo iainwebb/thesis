@@ -16,7 +16,8 @@
 # dim(abs(partial_derivatives_normalised_response_surface_1_dataframe * partial_derivatives_normalised_response_surface_2_dataframe))
 
 # START ------
-setwd("U:/ManWin/My Documents/thesis")
+# setwd("U:/ManWin/My Documents/thesis")
+setwd("C:/Users/smp22ijw/Desktop")
 rm(list = ls())
 calcs <- 1
 
@@ -58,8 +59,17 @@ sq_exp_cov_function <- function(matrix_1, matrix_2, l = l_hat_diag_matrix){
   }
   return(cov_matrix)
 }
+library(fields)
+corGaussian <- function(inputs, inputs2, phi) {
+  
+  if (missing(inputs2) || is.null(inputs2))
+    return(corGaussianSquare(inputs, phi))
+  
+  delta <- (phi)
+  exp(-(rdist(inputs / rep(delta, each = nrow(inputs)), inputs2 / rep(delta, each = nrow(inputs2))) ^ 2))
+}
 # define x_star  ---------------------------
-N <- 100000
+N <- 200000
 x_star_matrix <- t(randomLHS(N, p))
 # x_star_matrix <- t(read.csv("data/x_norm_matrix.csv", header = FALSE, sep = ""))[,sample(1:200000, 10000)]
 N <- ncol(x_star_matrix)
@@ -68,9 +78,12 @@ colnames(x_star_T_dataframe) <- paste0(rep("x.",p), 1:p)
 # make H_matrix
 H_matrix <- cbind(c(rep(1, n)), t(unname(x_norm_matrix)))
 
-# gridboxes <- matrix(c(20, 120, 20, 120), nrow = 2, byrow = T)
+gridboxes <- matrix(c(20, 120, 20, 120), nrow = 2, byrow = T)
 # gridboxes <- matrix(c(20, 120, 20, 121), nrow = 2, byrow = T)
-gridboxes <- matrix(c(20, 120, 100, 85), nrow = 2, byrow = T)
+# gridboxes <- matrix(c(20, 120, 100, 85), nrow = 2, byrow = T)
+
+c <- 1
+g <- 1
 
 for (c in 1:calcs) {
   
@@ -105,7 +118,11 @@ for (c in 1:calcs) {
                                        type="SK"
     )
     # create A_matrix
-    A_matrix <- sq_exp_cov_function(x_norm_matrix, x_norm_matrix) + diag(0.001, nrow(x_norm_T_matrix))
+    # A_matrix <- 
+    #   sq_exp_cov_function(x_norm_matrix, x_norm_matrix) 
+    # + diag(0.001, nrow(x_norm_T_matrix))
+    A_matrix <-
+      corGaussian(t(x_norm_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
     # make A_inv_matrix
     A_inv_matrix <- solve(A_matrix)
     
@@ -118,10 +135,11 @@ for (c in 1:calcs) {
     colnames(partial_derivatives_dataframe) <- paste0(rep("d_dx.",p), 1:p)
     
     # make t(x_star)^T
-    t_x_star_T_matrix <- sq_exp_cov_function(x_star_matrix, x_norm_matrix)
+    # t_x_star_T_matrix <- sq_exp_cov_function(x_star_matrix, x_norm_matrix)
+    t_x_star_T_matrix <- corGaussian(t(x_star_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
     
-    # i <- 36
-    # k <- 9
+    i <- sample(1:37, 1)
+    k <- N/2
     for (i in 1:p) {
       d_dx_i_t_x_star_T_matrix <- -2 / l_hat_matrix[i,]^2 * (matrix(rep(x_star_matrix[i,], n), ncol = n) - matrix(rep(x_norm_matrix[i,], N), ncol = n, byrow = T)) * t_x_star_T_matrix[,]
       for (k in 1:N) {
@@ -187,3 +205,28 @@ for (c in 1:calcs) {
 # }
 # 
 # print(c(p, N))
+
+corGaussian <- function(inputs, inputs2, phi) {
+  
+  if (missing(inputs2) || is.null(inputs2))
+    return(corGaussianSquare(inputs, phi))
+  
+  delta <- (phi)
+  exp(-(rdist(inputs / rep(delta, each = nrow(inputs)), inputs2 / rep(delta, each = nrow(inputs2))) ^ 2))
+}
+
+sq_exp_cov_function <- function(matrix_1, matrix_2, l = l_hat_diag_matrix){
+  cov_matrix <- matrix(rep(NA, ncol(matrix_1) * ncol(matrix_2)), nrow = ncol(matrix_1))
+  for (a in 1:nrow(cov_matrix)) {
+    for (b in 1:ncol(cov_matrix)) {
+      cov_matrix[a,b] <- exp(-matrix((matrix_1[,a] - matrix_2[,b]), nrow = 1) %*% l_hat_diag_matrix %*% matrix((matrix_1[,a] - matrix_2[,b]), ncol = 1))
+    }
+  }
+  return(cov_matrix)
+}
+t_x_star_T_matrix <- sq_exp_cov_function(x_star_matrix, x_norm_matrix)
+
+library(fields)
+t_x_star_T_matrix_2 <- corGaussian(t(x_star_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
+
+sum(abs(t_x_star_T_matrix - t_x_star_T_matrix_2) > 0.0001)
