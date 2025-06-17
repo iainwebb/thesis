@@ -68,9 +68,8 @@ colnames(x_star_T_dataframe) <- paste0(rep("x.",p), 1:p)
 # make H_matrix
 H_matrix <- cbind(c(rep(1, n)), t(unname(x_norm_matrix)))
 
-# gridboxes <- matrix(c(20, 120, 20, 120), nrow = 2, byrow = T)
-# gridboxes <- matrix(c(20, 120, 20, 121), nrow = 2, byrow = T)
-gridboxes <- matrix(c(20, 120, 100, 85), nrow = 2, byrow = T)
+gridboxes <- matrix(c(20, 120, 20, 120), nrow = 2, byrow = T)
+# gridboxes <- matrix(c(100, 85, 20, 120), nrow = 2, byrow = T)
 
 for (c in 1:calcs) {
   
@@ -138,32 +137,32 @@ for (c in 1:calcs) {
   
   # assign(paste0("AM_with_", N, "_attempt_", c), AM)
   write(AM, 
-        file=paste0("R/", 
+        file=paste0("R/land_with_itself_", 
                     gridboxes[1,1], "_", gridboxes[1,2], "_", 
                     gridboxes[2,1], "_", gridboxes[2,2],
                     "_AM_", N, "_pts_", p, "_pars.txt"),append=TRUE)
   write(AM, 
-        file=paste0("R/", 
+        file=paste0("R/land_with_itself_", 
                     gridboxes[1,1], "_", gridboxes[1,2], "_", 
                     gridboxes[2,1], "_", gridboxes[2,2],
                     "_all_", N, "_pts_", p, "_pars.txt"),append=TRUE)
   write(print(eval(parse(text = paste0("betas_with_", N, "_gb_", 1, "_attempt_", c)))), 
-        file=paste0("R/", 
+        file=paste0("R/land_with_itself_", 
                     gridboxes[1,1], "_", gridboxes[1,2], "_", 
                     gridboxes[2,1], "_", gridboxes[2,2],
                     "_all_", N, "_pts_", p, "_pars.txt"),append=TRUE)
   write(print(eval(parse(text = paste0("betas_with_", N, "_gb_", 2, "_attempt_", c)))), 
-        file=paste0("R/", 
+        file=paste0("R/land_with_itself_", 
                     gridboxes[1,1], "_", gridboxes[1,2], "_", 
                     gridboxes[2,1], "_", gridboxes[2,2],
                     "_all_", N, "_pts_", p, "_pars.txt"),append=TRUE)
   write(print(eval(parse(text = paste0("l_hat_with_", N, "_gb_", 1, "_attempt_", c)))), 
-        file=paste0("R/", 
+        file=paste0("R/land_with_itself_", 
                     gridboxes[1,1], "_", gridboxes[1,2], "_", 
                     gridboxes[2,1], "_", gridboxes[2,2],
                     "_all_", N, "_pts_", p, "_pars.txt"),append=TRUE)
   write(print(eval(parse(text = paste0("l_hat_with_", N, "_gb_", 2, "_attempt_", c)))), 
-        file=paste0("R/", 
+        file=paste0("R/land_with_itself_", 
                     gridboxes[1,1], "_", gridboxes[1,2], "_", 
                     gridboxes[2,1], "_", gridboxes[2,2],
                     "_all_", N, "_pts_", p, "_pars.txt"),append=TRUE)
