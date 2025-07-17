@@ -1,0 +1,221 @@
+---
+title: "Application paper (for ACP or JAMES)"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+    # includes:
+    #   after_body: appendix.md
+    toc: true
+    toc_depth: 2
+urlcolor: blue
+bibliography: references.bib
+link-citations: yes
+linkcolor: blue
+nocite: '@*'
+fontsize: 10pt
+linestretch: 1.19
+
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{subfig}
+  - \usepackage[most]{tcolorbox}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \usepackage[font=small,skip=0pt]{caption}
+  # - \usepackage{ulem}
+  - \setlength{\parskip}{1em}
+  - \setlength\parindent{24pt}
+---
+
+```{r code chunk options, echo=F}
+show_text <- c(FALSE, TRUE) # Leave first as F, second T to show text
+run_but_hidden <- FALSE
+key_code <- TRUE
+not_run <- FALSE
+essential_figures <- c(FALSE, TRUE)
+cache_things <- FALSE
+regular_box <- "black"
+irregular_box <- "red"
+
+knitr::opts_chunk$set(fig.align="center")
+```
+
+
+# Abstract \label{abstract}
+
+- Topic
+- Status
+- Gap
+- Objective
+- Approach
+- Results
+- Implications
+
+# Introduction (what is the problem) \label{introduction}
+
+## Background / motivation -- follow JJ9000, i.e. what's come before
+
+## Literature review of application area -- why important?
+
+## Equifinality and why an issue
+
+## Paper outline
+
+# Methods (how to tackle it) \label{methods}
+
+## PPE being used (data description)
+
+## Choice of variables: AOD, PM2.5, Sulphate (see R23?)
+
+## Alignment measure description
+
+## Statistical methods: GP (inc. validation), `lm`, description of two-step approach
+
+## Simple example using simulation (proof of concept)
+
+# Results \label{results}
+
+## For
+## each
+## response
+## variable
+
+# Appendix \label{appendix}
+
+## Table of parameters in PPE
+
+## Extra plots?
+
+
+Lorem ipsum dolor sit amet consectetur adipiscing elit, malesuada metus semper purus senectus ultricies **facilisi bibendum**, iaculis pulvinar ridiculus ullamcorper velit augue. Odio aliquam pretium nec facilisis eros viverra quisque ultrices turpis nostra, duis fermentum habitasse magnis posuere egestas lectus fames vestibulum hac commodo, et nisl aliquet condimentum blandit diam rhoncus in porta. Erat accumsan aliquet vitae sem pellentesque metus volutpat commodo, fermentum fringilla iaculis pharetra aptent mattis gravida neque, habitasse sed nostra vivamus ultricies feugiat curabitur.
+
+```{r 2d-par-unc-space-random-run, echo = FALSE, fig.cap='Reference to the first figure (a). In (b), some other reference.', fig.subcap=c('', ''), out.width='.3\\linewidth', fig.asp=1, fig.ncol = 2}
+knitr::include_graphics(c("figures/cr_figures/2d-par-unc-space-random-run-1.jpg","figures/cr_figures/2d-par-unc-space-random-run-2.jpg"))
+```
+
+Fermentum fames donec phasellus pretium nostra mauris parturient scelerisque dis, lacus torquent vivamus cum aliquam per curabitur vitae, faucibus mattis libero integer eros tortor dictumst taciti. Per laoreet nullam senectus fames odio lobortis bibendum nisl elementum fusce, nunc aptent pellentesque mus aenean fringilla quis feugiat hendrerit eu, erat tempor orci duis placerat euismod integer consequat facilisis. Odio orci fringilla ultrices cum aptent gravida habitasse dictum, suspendisse proin congue velit luctus fusce nullam vestibulum netus, facilisi nec magna sem nibh nam nostra.
+
+Lorem ipsum dolor sit amet consectetur adipiscing elit, malesuada metus semper purus senectus ultricies facilisi bibendum, iaculis pulvinar ridiculus ullamcorper velit augue. Odio aliquam pretium nec facilisis eros viverra quisque ultrices turpis nostra, duis fermentum habitasse magnis posuere egestas lectus fames vestibulum hac commodo, et nisl aliquet condimentum blandit diam rhoncus in porta. Erat accumsan aliquet vitae sem pellentesque metus volutpat commodo, fermentum fringilla iaculis pharetra aptent mattis gravida neque, habitasse sed nostra vivamus ultricies feugiat curabitur.
+
+Fermentum fames donec phasellus pretium nostra mauris parturient scelerisque dis, lacus torquent vivamus cum aliquam per curabitur vitae, faucibus mattis libero integer eros tortor dictumst taciti. Per laoreet nullam senectus fames odio lobortis bibendum nisl elementum fusce, nunc aptent pellentesque mus aenean fringilla quis feugiat hendrerit eu, erat tempor orci duis placerat euismod integer consequat facilisis. Odio orci fringilla ultrices cum aptent gravida habitasse dictum, suspendisse proin congue velit luctus fusce nullam vestibulum netus, facilisi nec magna sem nibh nam nostra.
+
+Lorem ipsum dolor sit amet consectetur adipiscing elit $\eta(.)$ malesuada $n$ metus semper $\{\textbf{x}_1, \dots, \textbf{x}_n \}$ (purus senectus ultricies facilisi bibendum), iaculis pulvinar $$\mathbf{y}^T = (y_1 = \eta(\mathbf{x}_1), \dots, y_n = \eta(\mathbf{x}_n))$$ ridiculus
+\begin{equation}
+\mathbf{y} \; | \; \pmb \beta, \sigma^2 \sim
+\text{N}(H \pmb \beta, \sigma^2 A)
+\label{eqn:etaprior}
+\end{equation}
+et
+\begin{align*}
+H &= (\mathbf{h}(\mathbf{x}_1) , \dots, \mathbf{h}(\mathbf{x}_n)), \\
+A &=
+\begin{pmatrix}
+1 & c(\textbf{x}_1, \textbf{x}_2) & \dots & c(\textbf{x}_1, \textbf{x}_n) \\
+\\
+c(\textbf{x}_2, \textbf{x}_1) & 1 & & \vdots \\
+\\
+\vdots & & \ddots & \\
+\\
+c(\textbf{x}_n, \textbf{x}_1) & \dots & & 1
+\end{pmatrix}
+.
+\end{align*}
+Odio (\ref{eqn:etaprior}) et Property X in Section 7.2 of @krzanowski88 aliquam pretium nec,
+\begin{equation}
+\eta(.) | \pmb \beta, \sigma^2, \mathbf{y} \sim \text{N}(m^*(.), \sigma^2 c^*(.,.)),
+\label{eqn:etapostrdistn}
+\end{equation}
+facilisis eros viverra 
+\begin{align}
+m^*(\mathbf{x}) &= \mathbf{h}(\mathbf{x})^T \pmb \beta + \mathbf{t}(\mathbf{x})^T A^{-1} (\mathbf{y} - H \pmb{\beta}), \label{eqn:postrmeanfunc} \\
+c^*(\mathbf{x},\mathbf{x}') &= c(\mathbf{x},\mathbf{x}') - \mathbf{t}(\mathbf{x})^T A^{-1} \mathbf{t}(\mathbf{x'})^T, \nonumber
+\end{align}
+where $$\mathbf{t}(\mathbf{x})^T = (c(\mathbf{x}, \mathbf{x}_1), \dots, c(\mathbf{x}, \mathbf{x}_n)).$$
+
+```{r, include=F}
+
+# Real-life function
+simulator <- function(x){
+  sin(x)
+}
+
+# Number of observations
+n <- 5
+
+
+
+# Specify the inputs
+extra <- -1
+shift <- 0
+control_inputs <- matrix(seq(0+extra,2*pi-extra,len=n+2), ncol = 1)[2:(n+1),] + shift
+
+# Observations
+y <- simulator(control_inputs)
+y <- as.matrix(y, ncol=1)
+
+```
+
+Fermentum fames donec phasellus pretium nostra mauris parturient scelerisque dis, lacus torquent vivamus cum aliquam per curabitur vitae, faucibus mattis libero integer eros tortor dictumst taciti. Per laoreet nullam senectus fames odio lobortis bibendum nisl elementum fusce, nunc aptent pellentesque mus aenean fringilla quis feugiat hendrerit eu, erat tempor orci duis placerat euismod integer consequat facilisis. Odio orci, $$\textbf{y} =\begin{bmatrix}\eta(x_1) \\ \vdots \\ \eta(x_5) \\ \end{bmatrix}.$$
+
+```{r, include=F}
+
+library(DiceKriging)
+
+# theta <- 1
+# sigma <- 1
+# trend <- c(1.2187673,-0.3879457)
+
+model1 <- km(y~1, design=data.frame(x=control_inputs), response=data.frame(y=y), 
+             covtype="gauss" 
+             # ,coef.trend=trend
+             # ,coef.cov=1
+             # ,coef.var=sigma^2
+)
+
+
+# Predictions
+expand_quantity <- 3
+tmax <- 2*pi + expand_quantity
+tmin <- 0 - expand_quantity
+t <- seq(from=tmin, to=tmax, by=0.005)
+
+preds <- predict(model1, newdata=data.frame(x=t), type="SK")
+
+```
+
+Lorem ipsum dolor sit amet \texttt{km()} et \texttt{predict()} consectetur adipiscing elit, malesuada metus semper purus senectus ultricies facilisi bibendum, iaculis pulvinar ridiculus ullamcorper velit augue. Odio aliquam pretium nec facilisis eros $\hat{\beta_0} =$ `r round(model1@trend.coef, 2)`, $\hat{\sigma^2} =$ `r round(model1@covariance@sd2, 2)` et $\hat{b} =$ `r round(1/(2*model1@covariance@range.val^2),2)` viverra quisque ultrices turpis nostra, duis fermentum habitasse magnis posuere egestas lectus fames vestibulum hac commodo, et nisl aliquet condimentum blandit diam rhoncus in porta. Erat accumsan aliquet vitae sem pellentesque metus volutpat commodo, fermentum fringilla iaculis pharetra aptent mattis gravida neque, habitasse sed nostra vivamus ultricies feugiat curabitur.
+
+```{r, fig.width=5, fig.height=3.5, fig.cap="Figure caption.", echo=F}
+
+gp1d <- data.frame(t, preds$mean, preds$lower95, preds$upper95)
+colnames(gp1d) <- c("x", "mean", "lower95", "upper95")
+
+x_label <- "input, $x$"
+y_label <- "output"
+
+data_points <- data.frame(control_inputs, y)
+
+# Bounds
+y_upper <- max(abs(c(max(gp1d[,-1]), min(gp1d[,-1]))))
+y_lower <- -y_upper
+
+library(ggplot2)
+library(latex2exp) # displays latex in ggplot labels
+
+ggplot(gp1d, aes(x=x, y=mean)) +
+  geom_rect(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf, fill="white") +  
+  geom_line(data=gp1d, aes(x=x,y=mean),colour="blue", linewidth=0.5) +
+  geom_line(data=gp1d,aes(x=x,y=lower95), colour="blue", linewidth=0.25, linetype="dashed") +
+  geom_line(data=gp1d,aes(x=x,y=upper95), colour="blue", linewidth=0.25, linetype="dashed") +
+  theme_bw() +
+  scale_y_continuous(lim=c(y_lower,y_upper), name=TeX(y_label)) +
+  xlab(TeX(x_label)) +
+  geom_function(fun = function(x) sin(x), colour="grey", linewidth=0.25) +
+  scale_x_continuous(breaks  = c(seq(0, 2*pi, 2*pi)), 
+                    labels = c("0", TeX("$2\\pi$"))) +
+  geom_hline(yintercept=0, linewidth=0.5, colour="black") +
+  geom_point(data=data_points,aes(x=control_inputs,y=y), color="black")
+```
+
+# Citations
