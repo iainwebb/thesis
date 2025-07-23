@@ -473,20 +473,22 @@ map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 
 # First scatterplots
 
-# AM_A_O_D_versus_E_R_F_all_lm_matrix <- matrix(NA, nrow = 192, ncol = 144)
-# assign(paste0("gp_d_dxi_normalised_E_R_F_matrix"),
-#        matrix(as.numeric(readLines(paste0("object/gp_d_dxi_normalised_E_R_F_matrix", "_", N, ".txt"))),
-#               nrow = p)
-# )
-# for (long in 1:192) {
-#   for (lat in 1:144) {
-#     AM_A_O_D_versus_E_R_F_all_lm_matrix[long, lat] <-
-#         sum(abs(colSums(matrix(rep(lm_all_d_dxi_normalised_A_O_D_array[long, lat,], N), nrow = p, byrow = F) *
-#                           gp_d_dxi_normalised_E_R_F_matrix))
-#         ) / N
-#   }
-#   cat(long, "/192, ", sep = "")
-# }
+N <- 100000
+
+AM_A_O_D_versus_E_R_F_all_lm_matrix <- matrix(NA, nrow = 192, ncol = 144)
+assign(paste0("gp_d_dxi_normalised_E_R_F_matrix"),
+       matrix(as.numeric(readLines(paste0("object/gp_d_dxi_normalised_E_R_F_matrix", "_", N, ".txt"))),
+              nrow = p)
+)
+for (long in 1:192) {
+  for (lat in 1:144) {
+    AM_A_O_D_versus_E_R_F_all_lm_matrix[long, lat] <-
+        sum(abs(colSums(matrix(rep(lm_all_d_dxi_normalised_A_O_D_array[long, lat,], N), nrow = p, byrow = F) *
+                          gp_d_dxi_normalised_E_R_F_matrix))
+        ) / N
+  }
+  cat(long, "/192, ", sep = "")
+}
 
 # # export
 # write_lines(as.vector(AM_A_O_D_versus_E_R_F_all_lm_matrix),
