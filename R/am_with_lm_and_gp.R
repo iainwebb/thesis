@@ -6,7 +6,9 @@
 options(scipen=999)
 
 library(readr)
+# library(readr, lib="C:/Users/smp22ijw/Desktop/Library/") # if Lenovo
 library(DiceKriging)
+# library(DiceKriging, lib="C:/Users/smp22ijw/Desktop/Library/") # if Lenovo
 # https://colordesigner.io/gradient-generator
 
 # Importing input settings ----
@@ -17,12 +19,13 @@ p <- ncol(inputs_x_norm_T_matrix)
 
 ## AOD_Total
 library(ncdf4)
+# library(ncdf4, lib="C:/Users/smp22ijw/Desktop/Library/") # if Lenovo
 ACURE_P3_AOD_Total_jul_nc <- nc_open(
   paste("X:/johnson_group/Aerosol-MFR/A-CURE-UKESM1-PPE-Data/Outputs/AOD/ACURE_P3_AOD_Total_jul.nc")
-  )
+)
 ACURE_P3_AOD_Total_jul_array <- ncvar_get(
   ACURE_P3_AOD_Total_jul_nc, names(ACURE_P3_AOD_Total_jul_nc$var)
-  )
+)
 response_A_O_D_array <- ACURE_P3_AOD_Total_jul_array[,,2,]
 rm("ACURE_P3_AOD_Total_jul_nc", "ACURE_P3_AOD_Total_jul_array")
 
@@ -31,12 +34,17 @@ rm("ACURE_P3_AOD_Total_jul_nc", "ACURE_P3_AOD_Total_jul_array")
 response_E_R_F_dataframe <- read.table(
   "X:/johnson_group/Aerosol-MFR/A-CURE-UKESM1-PPE-Data/Outputs/global_mean_forcing/ERF_PPE_global_jul.dat", 
   col.names = "E_R_F"
-  )
+)
+# response_E_R_F_dataframe <- read.table(
+#   "data/ERF_PPE_global_jul.dat", 
+#   col.names = "E_R_F"
+# ) # if Lenovo
 
 # Importing map-required things ----
 ACURE_P3_AOD_Total_jul_nc <- nc_open(
   paste("X:/johnson_group/Aerosol-MFR/A-CURE-UKESM1-PPE-Data/Outputs/AOD/ACURE_P3_AOD_Total_jul.nc")
-  )
+)
+# ACURE_P3_AOD_Total_jul_nc <- nc_open(paste("data/ACURE_P3_AOD_Total_jul.nc")) # if Lenovo
 longitude = ncvar_get(ACURE_P3_AOD_Total_jul_nc,"longitude") - 180
 latitude = ncvar_get(ACURE_P3_AOD_Total_jul_nc,"latitude")
 rm("ACURE_P3_AOD_Total_jul_nc")
@@ -70,6 +78,8 @@ threshold <- 0.60
 #   cat(long, "/192 ", sep = "")
 # }
 # rm("long", "lat", "df", "lin_mod")
+
+# export
 # write_lines(as.vector(R2_adj_A_O_D_matrix),
 #             file="object/R2_adj_A_O_D_matrix.txt")
 # write_lines(as.vector(lm_all_d_dxi_normalised_A_O_D_array),
@@ -77,8 +87,7 @@ threshold <- 0.60
 # write_lines(as.vector(lm_best_d_dxi_normalised_A_O_D_array),
 #             file=paste0("object/lm_best_d_dxi_normalised_A_O_D_array_0", threshold*100, ".txt"))
 
-### from before
-
+### import
 R2_adj_A_O_D_matrix <-
   matrix(as.numeric(readLines("object/R2_adj_A_O_D_matrix.txt")),
          nrow = length(longitude))
@@ -90,7 +99,7 @@ lm_all_d_dxi_normalised_A_O_D_array <-
 assign(paste0("lm_best_d_dxi_normalised_A_O_D_array"),
        array(as.numeric(readLines(paste0("object/lm_best_d_dxi_normalised_A_O_D_array_0", threshold*100, ".txt"))),
              dim = c(length(longitude), length(latitude), p))
-       )
+)
 sum(is.na(lm_best_d_dxi_normalised_A_O_D_array)) / 37 # check
 
 ### Frequency table
@@ -107,12 +116,14 @@ table(
 hist(R2_adj_A_O_D_matrix)
 ### Map
 library(fields)
+# library(readr, lib="C:/Users/smp22ijw/Desktop/Library/") # if Lenovo
 library(maps)
+# library(maps, lib="C:/Users/smp22ijw/Desktop/Library/") # if Lenovo
 image.plot(longitude, latitude,
            rbind(R2_adj_A_O_D_matrix[97:192,],
                  R2_adj_A_O_D_matrix[1:96,]),
            breaks = c(0,0.6,0.7,0.75,0.8,1),
-           col = c("blue","green","orange","yellow", "white"),
+           col = c("#0000ff","orange","green","yellow", "white"),
            xlab = "longitude", ylab = "latitude",
            axis.args=list(
              at=c(0,0.6,0.7,0.75,0.8,1),labels=as.character(c(0,0.6,0.7,0.75,0.8,1)),mgp=c(3,0.5,0)
@@ -167,6 +178,7 @@ q <- 1 + p
 n <- nrow(inputs_x_norm_T_matrix)
 
 library(lhs)
+# library(lhs, lib="C:/Users/smp22ijw/Desktop/Library/") # if Lenovo
 x_star_matrix <- t(randomLHS(N, p))
 x_norm_matrix <- t(inputs_x_norm_T_matrix)
 x_star_T_dataframe <- data.frame(t(x_star_matrix))
@@ -175,6 +187,7 @@ colnames(x_star_T_dataframe) <- colnames(inputs_x_norm_T_matrix)
 H_matrix <- cbind(c(rep(1, n)), t(unname(x_norm_matrix)))
 
 library(fields)
+# library(fields, lib="C:/Users/smp22ijw/Desktop/Library/") # if Lenovo
 corGaussian <- function(inputs, inputs2, phi) {
   
   if (missing(inputs2) || is.null(inputs2))
@@ -257,7 +270,7 @@ sum(is.na(AM_A_O_D_versus_E_R_F_matrix_case0))
 # AM_A_O_D_versus_E_R_F_matrix_case1 <- AM_A_O_D_versus_E_R_F_matrix_case0
 
 # sum(R2_adj_A_O_D_matrix >= threshold & R2_adj_E_R_F_matrix >= threshold)
- 
+
 # for (long in 1:192) {
 #   for (lat in 1:144) {
 #     AM_A_O_D_versus_E_R_F_matrix_case1[long, lat] <-
@@ -359,11 +372,12 @@ map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 
 ### from scratch
 
+# q <- 1 + p
 # gp_d_dxi_normalised_E_R_F_matrix <- gp_d_dxi_normalised_function(response_E_R_F_dataframe[,1])
 
 # export
-# write_lines(as.vector(gp_d_dxi_normalised_E_R_F_matrix),
-            # file=paste0("object/gp_d_dxi_normalised_E_R_F_matrix", "_", N, ".txt"))
+write_lines(as.vector(gp_d_dxi_normalised_E_R_F_matrix),
+            file=paste0("object/gp_d_dxi_normalised_E_R_F_matrix", "_", N, ".txt"))
 
 ### import
 assign(paste0("gp_d_dxi_normalised_E_R_F_matrix"),
@@ -474,21 +488,34 @@ map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 # First scatterplots
 
 N <- 100000
+inputs_x_norm_T_matrix <- read.csv("data/ACURE-UKESM1-PPE-par-norm-Design.csv")
+p <- ncol(inputs_x_norm_T_matrix)
+rm("inputs_x_norm_T_matrix")
 
-AM_A_O_D_versus_E_R_F_all_lm_matrix <- matrix(NA, nrow = 192, ncol = 144)
+# import
 assign(paste0("gp_d_dxi_normalised_E_R_F_matrix"),
        matrix(as.numeric(readLines(paste0("object/gp_d_dxi_normalised_E_R_F_matrix", "_", N, ".txt"))),
               nrow = p)
 )
-for (long in 1:192) {
-  for (lat in 1:144) {
-    AM_A_O_D_versus_E_R_F_all_lm_matrix[long, lat] <-
-        sum(abs(colSums(matrix(rep(lm_all_d_dxi_normalised_A_O_D_array[long, lat,], N), nrow = p, byrow = F) *
-                          gp_d_dxi_normalised_E_R_F_matrix))
-        ) / N
-  }
-  cat(long, "/192, ", sep = "")
-}
+
+# import
+lm_all_d_dxi_normalised_A_O_D_array <-
+  array(as.numeric(readLines("object/lm_all_d_dxi_normalised_A_O_D_array.txt")),
+        dim = c(length(longitude), length(latitude), p))
+
+# create AM_A_O_D_versus_E_R_F_all_lm_matrix
+
+# AM_A_O_D_versus_E_R_F_all_lm_matrix <- matrix(NA, nrow = 192, ncol = 144)
+
+# for (long in 1:192) {
+#   for (lat in 1:144) {
+#     AM_A_O_D_versus_E_R_F_all_lm_matrix[long, lat] <-
+#         sum(abs(colSums(matrix(rep(lm_all_d_dxi_normalised_A_O_D_array[long, lat,], N), nrow = p, byrow = F) *
+#                           gp_d_dxi_normalised_E_R_F_matrix))
+#         ) / N
+#   }
+#   cat(long, "/192, ", sep = "")
+# }
 
 # # export
 # write_lines(as.vector(AM_A_O_D_versus_E_R_F_all_lm_matrix),
@@ -496,9 +523,14 @@ for (long in 1:192) {
 
 # import
 assign(paste0("AM_A_O_D_versus_E_R_F_all_lm_matrix"),
-       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_all_lm_matrix.txt"))),
+       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_all_lm_matrix_", N, ".txt"))),
               nrow = length(longitude))
 )
+
+### import
+R2_adj_A_O_D_matrix <-
+  matrix(as.numeric(readLines("object/R2_adj_A_O_D_matrix.txt")),
+         nrow = length(longitude))
 
 R2_adj_AM_all_lm <- cbind("AOD_Total_R2_adj" 
                           = as.vector(R2_adj_A_O_D_matrix), 
@@ -597,14 +629,27 @@ map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 
 # Comparison between AM's obtaining with 100 versus 100,000
 
-assign(paste0("AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N),
-       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))),
-              nrow = length(longitude))
-)
 assign(paste0("AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100000),
        matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100000, ".txt"))),
               nrow = length(longitude))
 )
+assign(paste0("AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 10000),
+       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 10000, ".txt"))),
+              nrow = length(longitude))
+)
+assign(paste0("AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100),
+       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100, ".txt"))),
+              nrow = length(longitude))
+)
+
+plot(as.vector(AM_A_O_D_versus_E_R_F_matrix_060_100000)[which(as.vector(R2_adj_A_O_D_matrix) >= 0.60)] ~
+       as.vector(AM_A_O_D_versus_E_R_F_matrix_060_10000)[which(as.vector(R2_adj_A_O_D_matrix) >= 0.60)],
+     col = "black", pch = 15, xlim = c(0,1), ylim = c(0,1),
+     xlab = "AM for Total AOD (level 2) and Total ERF (both July), N = 10,000, threshold = 0.60",
+     ylab = "AM for Total AOD (level 2) and Total ERF (both July), N = 100,000, threshold = 0.60")
+points(as.vector(AM_A_O_D_versus_E_R_F_matrix_060_100000)[which(as.vector(R2_adj_A_O_D_matrix) < 0.60)] ~
+         as.vector(AM_A_O_D_versus_E_R_F_matrix_060_10000)[which(as.vector(R2_adj_A_O_D_matrix) < 0.60)],
+       col = "blue", pch = 15)
 plot(as.vector(AM_A_O_D_versus_E_R_F_matrix_060_100000)[which(as.vector(R2_adj_A_O_D_matrix) >= 0.60)] ~
        as.vector(AM_A_O_D_versus_E_R_F_matrix_060_100)[which(as.vector(R2_adj_A_O_D_matrix) >= 0.60)],
      col = "black", pch = 15, xlim = c(0,1), ylim = c(0,1),
