@@ -81,23 +81,23 @@ threshold <- 0.60
 
 # export
 # write_lines(as.vector(R2_adj_A_O_D_matrix),
-#             file="object/R2_adj_A_O_D_matrix.txt")
+#             file="objects/R2_adj_A_O_D_matrix.txt")
 # write_lines(as.vector(lm_all_d_dxi_normalised_A_O_D_array),
-#             file="object/lm_all_d_dxi_normalised_A_O_D_array.txt")
+#             file="objects/lm_all_d_dxi_normalised_A_O_D_array.txt")
 # write_lines(as.vector(lm_best_d_dxi_normalised_A_O_D_array),
-#             file=paste0("object/lm_best_d_dxi_normalised_A_O_D_array_0", threshold*100, ".txt"))
+#             file=paste0("objects/lm_best_d_dxi_normalised_A_O_D_array_0", threshold*100, ".txt"))
 
 ### import
 R2_adj_A_O_D_matrix <-
-  matrix(as.numeric(readLines("object/R2_adj_A_O_D_matrix.txt")),
+  matrix(as.numeric(readLines("objects/R2_adj_A_O_D_matrix.txt")),
          nrow = length(longitude))
 
 lm_all_d_dxi_normalised_A_O_D_array <-
-  array(as.numeric(readLines("object/lm_all_d_dxi_normalised_A_O_D_array.txt")),
+  array(as.numeric(readLines("objects/lm_all_d_dxi_normalised_A_O_D_array.txt")),
         dim = c(length(longitude), length(latitude), p))
 
 assign(paste0("lm_best_d_dxi_normalised_A_O_D_array"),
-       array(as.numeric(readLines(paste0("object/lm_best_d_dxi_normalised_A_O_D_array_0", threshold*100, ".txt"))),
+       array(as.numeric(readLines(paste0("objects/lm_best_d_dxi_normalised_A_O_D_array_0", threshold*100, ".txt"))),
              dim = c(length(longitude), length(latitude), p))
 )
 sum(is.na(lm_best_d_dxi_normalised_A_O_D_array)) / 37 # check
@@ -152,9 +152,9 @@ map("world",lwd=1.2,add=TRUE, lty=1)
 # }
 # rm("long", "lat", "df", "lin_mod")
 # write_lines(as.vector(R2_adj_E_R_F_matrix),
-#             file="object/R2_adj_E_R_F_matrix.txt")
+#             file="objects/R2_adj_E_R_F_matrix.txt")
 # write_lines(as.vector(lm_d_dxi_normalised_E_R_F_array),
-#             file="object/lm_d_dxi_normalised_E_R_F_array.txt")
+#             file="objects/lm_d_dxi_normalised_E_R_F_array.txt")
 # 
 # sum(is.na(lm_d_dxi_normalised_E_R_F_array)) / 37 # check
 # 192 * 144
@@ -162,11 +162,11 @@ map("world",lwd=1.2,add=TRUE, lty=1)
 ### from before
 
 R2_adj_E_R_F_matrix <-
-  matrix(as.numeric(readLines("object/R2_adj_E_R_F_matrix.txt")),
+  matrix(as.numeric(readLines("objects/R2_adj_E_R_F_matrix.txt")),
          nrow = length(longitude))
 
 lm_d_dxi_normalised_E_R_F_array <-
-  array(as.numeric(readLines("object/lm_d_dxi_normalised_E_R_F_array.txt")),
+  array(as.numeric(readLines("objects/lm_d_dxi_normalised_E_R_F_array.txt")),
         dim = c(length(longitude), length(latitude), p))
 
 sum(is.na(lm_d_dxi_normalised_E_R_F_array)) / 37 # check
@@ -254,11 +254,11 @@ gp_d_dxi_normalised_function <- function(response) {
 
 # export
 # write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix_case0),
-#             file=paste0("object/AM_A_O_D_versus_E_R_F_matrix_case0_0", threshold*100, "_", N, ".txt"))
+#             file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_case0_0", threshold*100, "_", N, ".txt"))
 
 # import
 assign(paste0("AM_A_O_D_versus_E_R_F_matrix_case0"),
-       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_case0_0", threshold*100, "_", N, ".txt"))),
+       matrix(as.numeric(readLines(paste0("objects/AM_A_O_D_versus_E_R_F_matrix_case0_0", threshold*100, "_", N, ".txt"))),
               nrow = length(longitude))
 )
 sum(is.na(AM_A_O_D_versus_E_R_F_matrix_case0))
@@ -280,18 +280,18 @@ sum(is.na(AM_A_O_D_versus_E_R_F_matrix_case0))
 #       else NA
 #     if (R2_adj_A_O_D_matrix[long, lat] >= threshold & R2_adj_E_R_F_matrix[long, lat] >= threshold)
 #       write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix_case1),
-#                   file=paste0("object/AM_A_O_D_versus_E_R_F_matrix_case1_0", threshold*100, "_", N, ".txt"))
+#                   file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_case1_0", threshold*100, "_", N, ".txt"))
 #   }
 #   cat(long, "/192 ", sep = "")
 # }
 
 # export
 # write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix_case1),
-#             file=paste0("object/AM_A_O_D_versus_E_R_F_matrix_case1_0", threshold*100, "_", N, ".txt"))
+#             file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_case1_0", threshold*100, "_", N, ".txt"))
 
 # import
 assign(paste0("AM_A_O_D_versus_E_R_F_matrix_case1"),
-       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_case1_0", threshold*100, "_", N, ".txt"))),
+       matrix(as.numeric(readLines(paste0("objects/AM_A_O_D_versus_E_R_F_matrix_case1_0", threshold*100, "_", N, ".txt"))),
               nrow = length(longitude))
 )
 
@@ -330,18 +330,18 @@ map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 #       else AM_A_O_D_versus_E_R_F_matrix_case2[long, lat]
 #     if (R2_adj_A_O_D_matrix[long, lat] < threshold & R2_adj_E_R_F_matrix[long, lat] >= threshold)
 #       write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix_case2),
-#                   file=paste0("object/AM_A_O_D_versus_E_R_F_matrix_case2_0", threshold*100, "_", N, ".txt"))
+#                   file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_case2_0", threshold*100, "_", N, ".txt"))
 #   }
 #   cat(long, "/192 ", sep = "")
 # }
 
 # export
 # write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix_case2),
-#             file=paste0("object/AM_A_O_D_versus_E_R_F_matrix_case2_0", threshold*100, "_", N, ".txt"))
+#             file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_case2_0", threshold*100, "_", N, ".txt"))
 
 # import
 assign(paste0("AM_A_O_D_versus_E_R_F_matrix_case2"),
-       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_case2_0", threshold*100, "_", N, ".txt"))),
+       matrix(as.numeric(readLines(paste0("objects/AM_A_O_D_versus_E_R_F_matrix_case2_0", threshold*100, "_", N, ".txt"))),
               nrow = length(longitude))
 )
 sum(is.na(AM_A_O_D_versus_E_R_F_matrix_case2))
@@ -376,12 +376,12 @@ map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 # gp_d_dxi_normalised_E_R_F_matrix <- gp_d_dxi_normalised_function(response_E_R_F_dataframe[,1])
 
 # export
-write_lines(as.vector(gp_d_dxi_normalised_E_R_F_matrix),
-            file=paste0("object/gp_d_dxi_normalised_E_R_F_matrix", "_", N, ".txt"))
+# write_lines(as.vector(gp_d_dxi_normalised_E_R_F_matrix),
+#             file=paste0("objects/gp_d_dxi_normalised_E_R_F_matrix", "_", N, ".txt"))
 
 ### import
 assign(paste0("gp_d_dxi_normalised_E_R_F_matrix"),
-       matrix(as.numeric(readLines(paste0("object/gp_d_dxi_normalised_E_R_F_matrix", "_", N, ".txt"))),
+       matrix(as.numeric(readLines(paste0("objects/gp_d_dxi_normalised_E_R_F_matrix", "_", N, "_2.txt"))),
               nrow = p)
 )
 
@@ -399,28 +399,39 @@ assign(paste0("gp_d_dxi_normalised_E_R_F_matrix"),
 
 # export
 # write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix_case3),
-#             file=paste0("object/AM_A_O_D_versus_E_R_F_matrix_case3_0", threshold*100, "_", N, ".txt"))
+#             file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_case3_0", threshold*100, "_", N, ".txt"))
 
 
 ### import
 assign(paste0("AM_A_O_D_versus_E_R_F_matrix_case3"),
-       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_case3_0", threshold*100, "_", N, ".txt"))),
+       matrix(as.numeric(readLines(paste0("objects/AM_A_O_D_versus_E_R_F_matrix_case3_0", threshold*100, "_", N, ".txt"))),
               nrow = length(longitude))
 )
+
+for (long in 1:192) {
+  for (lat in 1:144) {
+    AM_A_O_D_versus_E_R_F_matrix_case3[long, lat] <-
+      if (R2_adj_A_O_D_matrix[long, lat] < threshold & R2_adj_E_R_F_matrix[long, lat] < threshold)
+        -0.05
+      else AM_A_O_D_versus_E_R_F_matrix_case3[long, lat]
+    }
+  cat(long, "/192 ", sep = "")
+}
 
 sum(is.na(AM_A_O_D_versus_E_R_F_matrix_case3)) # check
 
 image.plot(longitude, latitude,
            rbind(AM_A_O_D_versus_E_R_F_matrix_case3[97:192,],
                  AM_A_O_D_versus_E_R_F_matrix_case3[1:96,]),
-           breaks = c(0,0.1,0.2,0.3,0.4,0.5,
+           breaks = c(-0.1,0,0.1,0.2,0.3,0.4,0.5,
                       0.6,0.7,0.8,0.9,1),
-           col = c("#ffcdcd","#ffbcbb","#ffaba8", "#ff9b95", "#ff8a82",
-                   "#ff796d", "#ff6556", "#ff4d3d", "#ff3324", "#ff0000"),
+           col = c("blue","red4","red3","red1","indianred1", "mistyrose",
+                   "honeydew1", "darkseagreen1", "palegreen2", "seagreen3", 
+                   "springgreen4"),
            xlab = "longitude", ylab = "latitude",
            axis.args=list(
-             at=c(0,0.1,0.2,0.3,0.4,0.5,
-                  0.6,0.7,0.8,0.9,1),labels=as.character(c(0,0.1,0.2,0.3,0.4,0.5,
+             at=c(-0.06,0,0.1,0.2,0.3,0.4,0.5,
+                  0.6,0.7,0.8,0.9,1),labels=as.character(c("NA",0,0.1,0.2,0.3,0.4,0.5,
                                                            0.6,0.7,0.8,0.9,1)),mgp=c(3,0.5,0)
            )
 )
@@ -450,7 +461,7 @@ map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 #     else index_counter
 #     if (R2_adj_A_O_D_matrix[long, lat] < threshold & R2_adj_E_R_F_matrix[long, lat] < threshold)
 #       write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix),
-#                   file=paste0("object/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))
+#                   file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))
 #   }
 # }
 # rm("long", "lat", "p", "q", "x_star_matrix", "x_norm_matrix", "x_star_T_dataframe", 
@@ -458,11 +469,11 @@ map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 
 # export
 # write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix),
-#             file=paste0("object/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))
+#             file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))
 
 ### import
 AM_A_O_D_versus_E_R_F_matrix <-
-  matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))),
+  matrix(as.numeric(readLines(paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))),
          nrow = length(longitude))
 sum(is.na(AM_A_O_D_versus_E_R_F_matrix)) # check
 
@@ -474,8 +485,9 @@ image.plot(longitude, latitude,
                  AM_A_O_D_versus_E_R_F_matrix[1:96,]),
            breaks = c(0,0.1,0.2,0.3,0.4,0.5,
                       0.6,0.7,0.8,0.9,1),
-           col = c("#ffcdcd","#ffbcbb","#ffaba8", "#ff9b95", "#ff8a82",
-                   "#ff796d", "#ff6556", "#ff4d3d", "#ff3324", "#ff0000"),
+           col = c("red4","red3","red1","indianred1", "mistyrose",
+                   "honeydew1", "darkseagreen1", "palegreen2", "seagreen3", 
+                   "springgreen4"),
            xlab = "longitude", ylab = "latitude",
            axis.args=list(
              at=c(0,0.1,0.2,0.3,0.4,0.5,
@@ -494,13 +506,13 @@ rm("inputs_x_norm_T_matrix")
 
 # import
 assign(paste0("gp_d_dxi_normalised_E_R_F_matrix"),
-       matrix(as.numeric(readLines(paste0("object/gp_d_dxi_normalised_E_R_F_matrix", "_", N, ".txt"))),
+       matrix(as.numeric(readLines(paste0("objects/gp_d_dxi_normalised_E_R_F_matrix", "_", N, ".txt"))),
               nrow = p)
 )
 
 # import
 lm_all_d_dxi_normalised_A_O_D_array <-
-  array(as.numeric(readLines("object/lm_all_d_dxi_normalised_A_O_D_array.txt")),
+  array(as.numeric(readLines("objects/lm_all_d_dxi_normalised_A_O_D_array.txt")),
         dim = c(length(longitude), length(latitude), p))
 
 # create AM_A_O_D_versus_E_R_F_all_lm_matrix
@@ -519,17 +531,17 @@ lm_all_d_dxi_normalised_A_O_D_array <-
 
 # # export
 # write_lines(as.vector(AM_A_O_D_versus_E_R_F_all_lm_matrix),
-#             file=paste0("object/AM_A_O_D_versus_E_R_F_all_lm_matrix_", N, ".txt"))
+#             file=paste0("objects/AM_A_O_D_versus_E_R_F_all_lm_matrix_", N, ".txt"))
 
 # import
 assign(paste0("AM_A_O_D_versus_E_R_F_all_lm_matrix"),
-       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_all_lm_matrix_", N, ".txt"))),
+       matrix(as.numeric(readLines(paste0("objects/AM_A_O_D_versus_E_R_F_all_lm_matrix_", N, ".txt"))),
               nrow = length(longitude))
 )
 
 ### import
 R2_adj_A_O_D_matrix <-
-  matrix(as.numeric(readLines("object/R2_adj_A_O_D_matrix.txt")),
+  matrix(as.numeric(readLines("objects/R2_adj_A_O_D_matrix.txt")),
          nrow = length(longitude))
 
 R2_adj_AM_all_lm <- cbind("AOD_Total_R2_adj" 
@@ -559,11 +571,13 @@ rm(AM_A_O_D_versus_E_R_F_matrix)
 N <- 100000
 
 AM_A_O_D_versus_E_R_F_matrix <-
-  matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))),
+  matrix(as.numeric(readLines(paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))),
          nrow = length(longitude))
 sum(is.na(AM_A_O_D_versus_E_R_F_matrix)) # check
 
-## Map
+## Selecting the two gridboxes
+
+### Map
 AM_A_O_D_versus_E_R_F_only_gp_matrix <- matrix(NA, nrow = 192, ncol = 144)
 for (long in 1:192) {
   for (lat in 1:144) {
@@ -579,8 +593,9 @@ image.plot(longitude, latitude,
                  AM_A_O_D_versus_E_R_F_only_gp_matrix[1:96,]),
            breaks = c(0,0.1,0.2,0.3,0.4,0.5,
                       0.6,0.7,0.8,0.9,1),
-           col = c("#ffcdcd","#ffbcbb","#ffaba8", "#ff9b95", "#ff8a82",
-                   "#ff796d", "#ff6556", "#ff4d3d", "#ff3324", "#ff0000"),
+           col = c("red4","red3","red1","indianred1", "mistyrose",
+                   "honeydew1", "darkseagreen1", "palegreen2", "seagreen3", 
+                   "springgreen4"),
            xlab = "longitude", ylab = "latitude",
            axis.args=list(
              at=c(0,0.1,0.2,0.3,0.4,0.5,
@@ -590,7 +605,8 @@ image.plot(longitude, latitude,
 )
 map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 
-# Selecting the two gridboxes
+### Finding indices of the two
+
 double_gp_indices <- which(R2_adj_A_O_D_matrix < threshold & R2_adj_E_R_F_matrix < threshold, arr.ind = TRUE)
 double_gp_indices_dataframe <- as.data.frame(double_gp_indices)
 double_gp_indices_sorted_dataframe <- double_gp_indices_dataframe[order(double_gp_indices_dataframe[,1]),]
@@ -599,25 +615,29 @@ double_gp_indices_sorted_dataframe
 
 range(double_gp_indices_sorted_dataframe[,2])
 hist(double_gp_indices_sorted_dataframe[,1])
-double_gp_indices_sorted_dataframe[34:47,]
+double_gp_indices_sorted_dataframe[33:47,]
 
-AM_A_O_D_versus_E_R_F_only_gp_2_gbs_matrix <- matrix(NA, nrow = 192, ncol = 144)
+### Map to confirm
+
+AM_A_O_D_versus_E_R_F_two_only_matrix <- matrix(NA, nrow = 192, ncol = 144)
 for (long in 1:192) {
   for (lat in 1:144) {
-    AM_A_O_D_versus_E_R_F_only_gp_2_gbs_matrix[long, lat] <- 
-      if (R2_adj_A_O_D_matrix[long, lat] < 0.6) AM_A_O_D_versus_E_R_F_only_gp_matrix[long, lat]
+    AM_A_O_D_versus_E_R_F_two_only_matrix[long, lat] <- 
+      if (long == 44 & (lat == 89 | lat == 90)) AM_A_O_D_versus_E_R_F_only_gp_matrix[long, lat]
     else NA
   }
   cat(long, "/192, ", sep = "")
 }
+table(AM_A_O_D_versus_E_R_F_two_only_matrix)
 
 image.plot(longitude, latitude,
-           rbind(AM_A_O_D_versus_E_R_F_only_gp_matrix[97:192,],
-                 AM_A_O_D_versus_E_R_F_only_gp_matrix[1:96,]),
+           rbind(AM_A_O_D_versus_E_R_F_two_only_matrix[97:192,],
+                 AM_A_O_D_versus_E_R_F_two_only_matrix[1:96,]),
            breaks = c(0,0.1,0.2,0.3,0.4,0.5,
                       0.6,0.7,0.8,0.9,1),
-           col = c("#ffcdcd","#ffbcbb","#ffaba8", "#ff9b95", "#ff8a82",
-                   "#ff796d", "#ff6556", "#ff4d3d", "#ff3324", "#ff0000"),
+           col = c("red4","red3","red1","indianred1", "mistyrose",
+                   "honeydew1", "darkseagreen1", "palegreen2", "seagreen3", 
+                   "springgreen4"),
            xlab = "longitude", ylab = "latitude",
            axis.args=list(
              at=c(0,0.1,0.2,0.3,0.4,0.5,
@@ -627,18 +647,203 @@ image.plot(longitude, latitude,
 )
 map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 
+### 20 re-runs of each, and export
+
+long <- 44; lat <- 90
+AM_A_O_D_versus_E_R_F_matrix[long, lat]
+# response <- response_A_O_D_array[long, lat,]
+# alignment_measure_44_90 <- rep(NA, 20)
+# parameter_estimates_44_90 <- data.frame(matrix(NA, nrow = 20, ncol = (1+38+37)))
+# colnames(parameter_estimates_44_90)[1] <- "sigma"
+# for (beta in 1:38) {
+#   colnames(parameter_estimates_44_90)[beta+1] <- paste0("beta_", beta)
+# }
+# for (l in 1:37) {
+#   colnames(parameter_estimates_44_90)[39+l] <- paste0("l_", l)
+# }
+# colnames(parameter_estimates_44_90)
+# for (rerun in 1:20) {
+#   gp <- km(~., 
+#            design = inputs_x_norm_T_matrix, 
+#            response = response, 
+#            covtype="gauss", optim.method="BFGS", control=list(maxit=500))
+#   betas_hat_matrix <- matrix(gp@trend.coef,
+#                              nrow = q)
+#   sigma_sq_hat <- gp@covariance@sd2
+#   l_hat_vector <- gp@covariance@range.val
+#   l_hat_matrix <- matrix(gp@covariance@range.val,
+#                          nrow = p)
+#   l_hat_diag_matrix <- diag(as.vector(l_hat_matrix))
+#   # assign(paste0("betas_with_", N, "_gb_", g, "_attempt_", c), gp@trend.coef)
+#   # assign(paste0("l_hat_with_", N, "_gb_", g, "_attempt_", c), gp@covariance@range.val)
+#   x_star_predictions_list <- predict(gp,
+#                                      newdata = x_star_T_dataframe,
+#                                      type="SK"
+#   )
+#   A_matrix <-
+#     corGaussian(t(x_norm_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
+#   # make A_inv_matrix
+#   A_inv_matrix <- solve(A_matrix)
+#   
+#   # partial derivatives
+#   partial_derivatives_dataframe <- data.frame(rep(NA, N))
+#   for (i in 2:p) {
+#     partial_derivatives_dataframe <- cbind(partial_derivatives_dataframe, 
+#                                            data.frame(rep(NA, N)))
+#   }
+#   colnames(partial_derivatives_dataframe) <- paste0(rep("d_dx_",p), 1:p)
+#   
+#   # make t(x_star)^T
+#   t_x_star_T_matrix <- corGaussian(t(x_star_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
+#   
+#   for (i in 1:p) {
+#     d_dxi_t_x_star_T_matrix <- -2 / l_hat_matrix[i,]^2 * (matrix(rep(x_star_matrix[i,], n), ncol = n) - matrix(rep(x_norm_matrix[i,], N), ncol = n, byrow = T)) * t_x_star_T_matrix[,]
+#     for (k in 1:N) {
+#       partial_derivatives_dataframe[k,i] <- as.vector(unlist(x_star_matrix[i,k] * betas_hat_matrix[i+1,] - 2 / l_hat_matrix[i,] * d_dxi_t_x_star_T_matrix[k,] %*% A_inv_matrix %*% (response - H_matrix %*% betas_hat_matrix)))
+#     }
+#     cat(long, "-", lat, " (", i, "/", p, ") ", sep = "")
+#   }
+#   
+#   partial_derivatives_normalised_dataframe <- partial_derivatives_dataframe / sqrt(rowSums(partial_derivatives_dataframe^2))
+#   
+#   partial_derivatives_normalised_transposed_matrix <- t(data.matrix(partial_derivatives_normalised_dataframe))
+#   
+#   alignment_measure_44_90[rerun] <- sum(abs(colSums(partial_derivatives_normalised_transposed_matrix *
+#                                                   gp_d_dxi_normalised_E_R_F_matrix))
+#                                         ) / N
+#   write_lines(alignment_measure_44_90,
+#               file="objects/alignment_measure_44_90.txt")
+#   parameter_estimates_44_90[rerun, 1] <- gp@covariance@sd2
+#   parameter_estimates_44_90[rerun, 2:39] <- gp@trend.coef
+#   parameter_estimates_44_90[rerun, 40:76] <- gp@covariance@range.val
+#   
+#   write_lines(as.vector(as.matrix(parameter_estimates_44_90)),
+#               file="objects/parameter_estimates_44_90.txt")
+# }
+
+## import
+
+alignment_measure_44_89 <-
+  as.numeric(readLines("objects/alignment_measure_44_89.txt"))
+parameter_estimates_44_89 <-
+  data.frame(matrix(as.numeric(readLines("objects/parameter_estimates_44_89.txt")),
+                    nrow = 20))
+colnames(parameter_estimates_44_89)[1] <- "sigma"
+for (beta in 1:38) {
+  colnames(parameter_estimates_44_89)[beta+1] <- paste0("beta_", beta)
+}
+for (l in 1:37) {
+  colnames(parameter_estimates_44_89)[39+l] <- paste0("l_", l)
+}
+colnames(parameter_estimates_44_89)
+alignment_measure_44_90 <-
+  as.numeric(readLines("objects/alignment_measure_44_90.txt"))
+parameter_estimates_44_90 <-
+  data.frame(matrix(as.numeric(readLines("objects/parameter_estimates_44_90.txt")),
+         nrow = 20))
+colnames(parameter_estimates_44_90)[1] <- "sigma"
+for (beta in 1:38) {
+  colnames(parameter_estimates_44_90)[beta+1] <- paste0("beta_", beta)
+}
+for (l in 1:37) {
+  colnames(parameter_estimates_44_90)[39+l] <- paste0("l_", l)
+}
+colnames(parameter_estimates_44_90)
+
+## analysis
+hist(alignment_measure_44_89)
+library(lattice)
+par(mfrow = c(1, 1))
+stripplot(alignment_measure_44_89, xlim = c(0,1),
+          pch=19, col=alpha("turquoise3",transparency_value),
+          xlab = "Alignment measure")
+alignment_measure_2_gbs_dataframe <- data.frame("AM" = c(alignment_measure_44_89, alignment_measure_44_90), "gridbox" = c(rep(89, 20), rep(90, 20)))
+par(mfrow = c(1, 1))
+stripchart(AM~gridbox,
+           data=alignment_measure_2_gbs_dataframe,
+           xlab="AM",
+           ylab="Gridbox (longitude, latitude)",
+           group.names=c("81.5625, 20.625","81.5625, 21.875"),
+           vertical=FALSE,
+           pch=19, col=c(alpha("turquoise3",transparency_value), alpha("purple",transparency_value)),
+           # method = "jitter", jitter = 0.0001
+)
+stripplot(alignment_measure_44_90)
+longitude[96+44]
+latitude[90]
+library(scales)
+#### investigating sigma
+jitter_value <- 0
+transparency_value <- 0.3
+par(mfrow = c(1, 1))
+for (sigma in 1:1) {
+  plot(jitter(alignment_measure_44_89, jitter_value) ~ jitter(parameter_estimates_44_89[,1], jitter_value), ask=FALSE,
+       xlab = expression(paste("AOD_Total GP estimate of ", sigma)),
+       ylab = "AM for AOD_Total versus ERF",
+       # ylab = paste0("AM for gridbox at longitude ", longitude[96+44], " and latitude", latitude[89]),
+       ylim = c(0,1), 
+       xlim = c(min(min(parameter_estimates_44_89[,1]), min(parameter_estimates_44_90[,1])),
+                               max(max(parameter_estimates_44_89[,1]), max(parameter_estimates_44_90[,1]))
+                               ),
+       pch=19, col=alpha("turquoise3",transparency_value)
+       )
+}
+points(jitter(alignment_measure_44_90, jitter_value) ~ jitter(parameter_estimates_44_90[,1], jitter_value),
+       pch=19, col=alpha("purple",transparency_value))
+#### investigating betas
+jitter_value <- 0
+par(mfrow = c(3, 3))
+for (betas in 0:37) {
+  plot(jitter(alignment_measure_44_89, jitter_value) ~ jitter(parameter_estimates_44_89[,2+betas], jitter_value), ask=FALSE,
+       # xlab = paste0("AOD_Total GP estimate of beta", expression(paste0(beta)), betas),
+       xlab = paste0("AOD_Total GP estimate of beta", betas),
+       ylab = "AM for AOD_Total versus ERF",
+       # ylab = paste0("AM for gridbox at longitude ", longitude[96+44], " and latitude", latitude[89]),
+       ylim = c(0,1), 
+       xlim = c(min(min(parameter_estimates_44_89[,2+betas]), min(parameter_estimates_44_90[,2+betas])),
+                max(max(parameter_estimates_44_89[,2+betas]), max(parameter_estimates_44_90[,2+betas]))
+                ),
+       pch=19, col=alpha("turquoise3",transparency_value)
+  )
+  points(jitter(alignment_measure_44_90, jitter_value) ~ jitter(parameter_estimates_44_90[,2+betas], jitter_value),
+         pch=19, col=alpha("purple",transparency_value))
+}
+#### investigating length parameters
+par(mfrow = c(3, 3))
+for (lengths in 1:37) {
+  plot(jitter(alignment_measure_44_89, jitter_value) ~ jitter(parameter_estimates_44_89[,39+lengths], jitter_value), ask=FALSE,
+       # xlab = paste0("AOD_Total GP estimate of beta", expression(paste0(beta)), betas),
+       xlab = paste0("AOD_Total GP estimate of l", lengths),
+       ylab = "AM for AOD_Total versus ERF",
+       # ylab = paste0("AM for gridbox at longitude ", longitude[96+44], " and latitude", latitude[89]),
+       ylim = c(0,1), 
+       xlim = c(min(min(parameter_estimates_44_89[,39+lengths]), min(parameter_estimates_44_90[,39+lengths])),
+                max(max(parameter_estimates_44_89[,39+lengths]), max(parameter_estimates_44_90[,39+lengths]))
+       ),
+       pch=19, col=alpha("black",transparency_value)
+  )
+  points(jitter(alignment_measure_44_90, jitter_value) ~ jitter(parameter_estimates_44_90[,39+lengths], jitter_value),
+         pch=19, col=alpha("purple",transparency_value))
+}
+
+if (R2_adj_A_O_D_matrix[long, lat] < threshold & R2_adj_E_R_F_matrix[long, lat] < threshold)
+  write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix),
+              file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))
+rm("long", "lat", "p", "q", "x_star_matrix", "x_norm_matrix", "x_star_T_dataframe",
+   "n", "H_matrix", "corGaussian", "gp_d_dxi_normalised_function", "index_counter")
+
 # Comparison between AM's obtaining with 100 versus 100,000
 
 assign(paste0("AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100000),
-       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100000, ".txt"))),
+       matrix(as.numeric(readLines(paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100000, ".txt"))),
               nrow = length(longitude))
 )
 assign(paste0("AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 10000),
-       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 10000, ".txt"))),
+       matrix(as.numeric(readLines(paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 10000, ".txt"))),
               nrow = length(longitude))
 )
 assign(paste0("AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100),
-       matrix(as.numeric(readLines(paste0("object/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100, ".txt"))),
+       matrix(as.numeric(readLines(paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100, ".txt"))),
               nrow = length(longitude))
 )
 
