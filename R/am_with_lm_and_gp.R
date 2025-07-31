@@ -647,7 +647,7 @@ image.plot(longitude, latitude,
 )
 map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 
-### 20 re-runs of each, and export
+### Attempt 1: 20 re-runs of each, and export ----
 
 long <- 44; lat <- 90
 AM_A_O_D_versus_E_R_F_matrix[long, lat]
@@ -832,7 +832,193 @@ if (R2_adj_A_O_D_matrix[long, lat] < threshold & R2_adj_E_R_F_matrix[long, lat] 
 rm("long", "lat", "p", "q", "x_star_matrix", "x_norm_matrix", "x_star_T_dataframe",
    "n", "H_matrix", "corGaussian", "gp_d_dxi_normalised_function", "index_counter")
 
-# Comparison between AM's obtaining with 100 versus 100,000
+### Attempt 2: 20 re-runs of each, and export ----
+
+long <- 44; lat <- 89
+AM_A_O_D_versus_E_R_F_matrix[long, lat]
+response <- response_A_O_D_array[long, lat,]
+alignment_measure_44_89_2 <- rep(NA, 20)
+parameter_estimates_44_89_2 <- data.frame(matrix(NA, nrow = 20, ncol = (1+38+37)))
+colnames(parameter_estimates_44_89)[1] <- "sigma"
+for (beta in 1:38) {
+  colnames(parameter_estimates_44_89)[beta+1] <- paste0("beta_", beta)
+}
+for (l in 1:37) {
+  colnames(parameter_estimates_44_89)[39+l] <- paste0("l_", l)
+}
+colnames(parameter_estimates_44_89)
+
+for (rerun in 1:1) {
+  gp <- km(~.,
+           design = inputs_x_norm_T_matrix,
+           response = response,
+           covtype="gauss", optim.method="BFGS", control=list(maxit=500))
+  betas_hat_matrix <- matrix(gp@trend.coef,
+                             nrow = q)
+  sigma_sq_hat <- gp@covariance@sd2
+  l_hat_vector <- gp@covariance@range.val
+  l_hat_matrix <- matrix(gp@covariance@range.val,
+                         nrow = p)
+  l_hat_diag_matrix <- diag(as.vector(l_hat_matrix))
+  # assign(paste0("betas_with_", N, "_gb_", g, "_attempt_", c), gp@trend.coef)
+  # assign(paste0("l_hat_with_", N, "_gb_", g, "_attempt_", c), gp@covariance@range.val)
+  x_star_predictions_list <- predict(gp,
+                                     newdata = x_star_T_dataframe,
+                                     type="SK"
+  )
+  A_matrix <-
+    corGaussian(t(x_norm_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
+  # make A_inv_matrix
+  A_inv_matrix <- solve(A_matrix)
+
+  # partial derivatives
+  partial_derivatives_dataframe <- data.frame(rep(NA, N))
+  for (i in 2:p) {
+    partial_derivatives_dataframe <- cbind(partial_derivatives_dataframe,
+                                           data.frame(rep(NA, N)))
+  }
+  colnames(partial_derivatives_dataframe) <- paste0(rep("d_dx_",p), 1:p)
+
+  # make t(x_star)^T
+  t_x_star_T_matrix <- corGaussian(t(x_star_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
+
+  for (i in 1:p) {
+    d_dxi_t_x_star_T_matrix <- -2 / l_hat_matrix[i,]^2 * (matrix(rep(x_star_matrix[i,], n), ncol = n) - matrix(rep(x_norm_matrix[i,], N), ncol = n, byrow = T)) * t_x_star_T_matrix[,]
+    for (k in 1:N) {
+      partial_derivatives_dataframe[k,i] <- as.vector(unlist(x_star_matrix[i,k] * betas_hat_matrix[i+1,] - 2 / l_hat_matrix[i,] * d_dxi_t_x_star_T_matrix[k,] %*% A_inv_matrix %*% (response - H_matrix %*% betas_hat_matrix)))
+    }
+    cat(long, "-", lat, " (", i, "/", p, ") ", sep = "")
+  }
+
+  partial_derivatives_normalised_dataframe <- partial_derivatives_dataframe / sqrt(rowSums(partial_derivatives_dataframe^2))
+
+  partial_derivatives_normalised_transposed_matrix <- t(data.matrix(partial_derivatives_normalised_dataframe))
+
+  alignment_measure_44_89[rerun] <- sum(abs(colSums(partial_derivatives_normalised_transposed_matrix *
+                                                  gp_d_dxi_normalised_E_R_F_matrix))
+                                        ) / N
+  write_lines(alignment_measure_44_89,
+              file="objects/alignment_measure_44_89.txt")
+  parameter_estimates_44_89[rerun, 1] <- gp@covariance@sd2
+  parameter_estimates_44_89[rerun, 2:39] <- gp@trend.coef
+  parameter_estimates_44_89[rerun, 40:76] <- gp@covariance@range.val
+
+  write_lines(as.vector(as.matrix(parameter_estimates_44_89)),
+              file="objects/parameter_estimates_44_89.txt")
+}
+
+## import
+
+alignment_measure_44_89 <-
+  as.numeric(readLines("objects/alignment_measure_44_89.txt"))
+parameter_estimates_44_89 <-
+  data.frame(matrix(as.numeric(readLines("objects/parameter_estimates_44_89.txt")),
+                    nrow = 20))
+colnames(parameter_estimates_44_89)[1] <- "sigma"
+for (beta in 1:38) {
+  colnames(parameter_estimates_44_89)[beta+1] <- paste0("beta_", beta)
+}
+for (l in 1:37) {
+  colnames(parameter_estimates_44_89)[39+l] <- paste0("l_", l)
+}
+colnames(parameter_estimates_44_89)
+alignment_measure_44_90 <-
+  as.numeric(readLines("objects/alignment_measure_44_90.txt"))
+parameter_estimates_44_90 <-
+  data.frame(matrix(as.numeric(readLines("objects/parameter_estimates_44_90.txt")),
+                    nrow = 20))
+colnames(parameter_estimates_44_90)[1] <- "sigma"
+for (beta in 1:38) {
+  colnames(parameter_estimates_44_90)[beta+1] <- paste0("beta_", beta)
+}
+for (l in 1:37) {
+  colnames(parameter_estimates_44_90)[39+l] <- paste0("l_", l)
+}
+colnames(parameter_estimates_44_90)
+
+## analysis
+hist(alignment_measure_44_89)
+library(lattice)
+par(mfrow = c(1, 1))
+stripplot(alignment_measure_44_89, xlim = c(0,1),
+          pch=19, col=alpha("turquoise3",transparency_value),
+          xlab = "Alignment measure")
+alignment_measure_2_gbs_dataframe <- data.frame("AM" = c(alignment_measure_44_89, alignment_measure_44_90), "gridbox" = c(rep(89, 20), rep(90, 20)))
+par(mfrow = c(1, 1))
+stripchart(AM~gridbox,
+           data=alignment_measure_2_gbs_dataframe,
+           xlab="AM",
+           ylab="Gridbox (longitude, latitude)",
+           group.names=c("81.5625, 20.625","81.5625, 21.875"),
+           vertical=FALSE,
+           pch=19, col=c(alpha("turquoise3",transparency_value), alpha("purple",transparency_value)),
+           # method = "jitter", jitter = 0.0001
+)
+stripplot(alignment_measure_44_90)
+longitude[96+44]
+latitude[90]
+library(scales)
+#### investigating sigma
+jitter_value <- 0
+transparency_value <- 0.3
+par(mfrow = c(1, 1))
+for (sigma in 1:1) {
+  plot(jitter(alignment_measure_44_89, jitter_value) ~ jitter(parameter_estimates_44_89[,1], jitter_value), ask=FALSE,
+       xlab = expression(paste("AOD_Total GP estimate of ", sigma)),
+       ylab = "AM for AOD_Total versus ERF",
+       # ylab = paste0("AM for gridbox at longitude ", longitude[96+44], " and latitude", latitude[89]),
+       ylim = c(0,1), 
+       xlim = c(min(min(parameter_estimates_44_89[,1]), min(parameter_estimates_44_90[,1])),
+                max(max(parameter_estimates_44_89[,1]), max(parameter_estimates_44_90[,1]))
+       ),
+       pch=19, col=alpha("turquoise3",transparency_value)
+  )
+}
+points(jitter(alignment_measure_44_90, jitter_value) ~ jitter(parameter_estimates_44_90[,1], jitter_value),
+       pch=19, col=alpha("purple",transparency_value))
+#### investigating betas
+jitter_value <- 0
+par(mfrow = c(3, 3))
+for (betas in 0:37) {
+  plot(jitter(alignment_measure_44_89, jitter_value) ~ jitter(parameter_estimates_44_89[,2+betas], jitter_value), ask=FALSE,
+       # xlab = paste0("AOD_Total GP estimate of beta", expression(paste0(beta)), betas),
+       xlab = paste0("AOD_Total GP estimate of beta", betas),
+       ylab = "AM for AOD_Total versus ERF",
+       # ylab = paste0("AM for gridbox at longitude ", longitude[96+44], " and latitude", latitude[89]),
+       ylim = c(0,1), 
+       xlim = c(min(min(parameter_estimates_44_89[,2+betas]), min(parameter_estimates_44_90[,2+betas])),
+                max(max(parameter_estimates_44_89[,2+betas]), max(parameter_estimates_44_90[,2+betas]))
+       ),
+       pch=19, col=alpha("turquoise3",transparency_value)
+  )
+  points(jitter(alignment_measure_44_90, jitter_value) ~ jitter(parameter_estimates_44_90[,2+betas], jitter_value),
+         pch=19, col=alpha("purple",transparency_value))
+}
+#### investigating length parameters
+par(mfrow = c(3, 3))
+for (lengths in 1:37) {
+  plot(jitter(alignment_measure_44_89, jitter_value) ~ jitter(parameter_estimates_44_89[,39+lengths], jitter_value), ask=FALSE,
+       # xlab = paste0("AOD_Total GP estimate of beta", expression(paste0(beta)), betas),
+       xlab = paste0("AOD_Total GP estimate of l", lengths),
+       ylab = "AM for AOD_Total versus ERF",
+       # ylab = paste0("AM for gridbox at longitude ", longitude[96+44], " and latitude", latitude[89]),
+       ylim = c(0,1), 
+       xlim = c(min(min(parameter_estimates_44_89[,39+lengths]), min(parameter_estimates_44_90[,39+lengths])),
+                max(max(parameter_estimates_44_89[,39+lengths]), max(parameter_estimates_44_90[,39+lengths]))
+       ),
+       pch=19, col=alpha("black",transparency_value)
+  )
+  points(jitter(alignment_measure_44_90, jitter_value) ~ jitter(parameter_estimates_44_90[,39+lengths], jitter_value),
+         pch=19, col=alpha("purple",transparency_value))
+}
+
+if (R2_adj_A_O_D_matrix[long, lat] < threshold & R2_adj_E_R_F_matrix[long, lat] < threshold)
+  write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix),
+              file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))
+rm("long", "lat", "p", "q", "x_star_matrix", "x_norm_matrix", "x_star_T_dataframe",
+   "n", "H_matrix", "corGaussian", "gp_d_dxi_normalised_function", "index_counter")
+
+# Comparison between AM's obtaining with 100 versus 100,000 ----
 
 assign(paste0("AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100000),
        matrix(as.numeric(readLines(paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", 100000, ".txt"))),
