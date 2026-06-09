@@ -1,0 +1,575 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+  10pt,
+]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{xcolor}
+\definecolor{mybgcolor}{HTML}{ebfff0}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={DiceKriging vs RobustGaSP},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{DiceKriging vs RobustGaSP}
+\author{}
+\date{\vspace{-2.5em}Gu (2019)}
+
+\begin{document}
+\maketitle
+
+\section{Prediction}\label{prediction}
+
+We now provide an example in which the input has one dimension, ranging
+from {[}0, 10{]} (Higdon and others (2002)). Estimation of the range
+parameters using the \texttt{RobustGaSP} package can be done through the
+following code:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(RobustGaSP)}
+\FunctionTok{library}\NormalTok{(lhs)}
+\FunctionTok{set.seed}\NormalTok{(}\DecValTok{1}\NormalTok{)}
+\NormalTok{input }\OtherTok{\textless{}{-}} \DecValTok{10} \SpecialCharTok{*} \FunctionTok{maximinLHS}\NormalTok{(}\AttributeTok{n=}\DecValTok{15}\NormalTok{, }\AttributeTok{k=}\DecValTok{1}\NormalTok{)}
+\NormalTok{output }\OtherTok{\textless{}{-}} \FunctionTok{higdon.1.data}\NormalTok{(input)}
+\NormalTok{model }\OtherTok{\textless{}{-}} \FunctionTok{rgasp}\NormalTok{(}\AttributeTok{design =}\NormalTok{ input, }\AttributeTok{response =}\NormalTok{ output)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## The upper bounds of the range parameters are 395.6186 
+## The initial values of range parameters are 7.912373 
+## Start of the optimization  1  : 
+## The number of iterations is  10 
+##  The value of the  marginal posterior  function is  2.81014 
+##  Optimized range parameters are 1.768226 
+##  Optimized nugget parameter is 0 
+##  Convergence:  TRUE 
+## The initial values of range parameters are 0.08251576 
+## Start of the optimization  2  : 
+## The number of iterations is  12 
+##  The value of the  marginal posterior  function is  2.81014 
+##  Optimized range parameters are 1.768226 
+##  Optimized nugget parameter is 0 
+##  Convergence:  TRUE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{model}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Call:
+## rgasp(design = input, response = output)
+## Mean parameters:  0.01184582 
+## Variance parameter:  0.5697197 
+## Range parameters:  1.768226 
+## Noise parameter:  0
+\end{verbatim}
+
+The fourth line of the code generates 15 LH samples at \([0,10]\)
+through the \texttt{maximinLHS} function of the \texttt{lhs} package
+(Carnell (2016)). The function \texttt{higdon.1.data} is provided within
+the \texttt{RobustGaSP} package which has the form
+\(y(x) = \sin(2\pi x/10) + 0.2\sin(2\pi x/2.5)\). The third line fits a
+GaSP model with the robust parameter estimation by marginal posterior
+modes.
+
+The plot function in \texttt{RobustGaSP} package implements the
+leave-one-out cross validation for a ``rgasp'' class after the GaSP
+model is built (see Figure 1 for its output):
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{plot}\NormalTok{(model)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{figure}
+\centering
+\pandocbounded{\includegraphics[keepaspectratio]{DiceKriging_vs_RobustGaSP_gu19_files/figure-latex/unnamed-chunk-2-1.pdf}}
+\caption{Figure 1}
+\end{figure}
+
+The prediction at a set of input points can be done by the following
+code:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{testing\_input }\OtherTok{\textless{}{-}} \FunctionTok{as.matrix}\NormalTok{(}\FunctionTok{seq}\NormalTok{(}\DecValTok{0}\NormalTok{, }\DecValTok{10}\NormalTok{, }\DecValTok{1}\SpecialCharTok{/}\DecValTok{50}\NormalTok{))}
+\NormalTok{model.predict}\OtherTok{\textless{}{-}}\FunctionTok{predict}\NormalTok{(model, testing\_input)}
+\FunctionTok{names}\NormalTok{(model.predict)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "mean"    "lower95" "upper95" "sd"
+\end{verbatim}
+
+The predict function generates a list containing the predictive mean,
+lower and upper 95\% quantiles and the predictive standard deviation, at
+each test point \(\textbf{x}^{*}\). The prediction and the real outputs
+are plotted in Figure 2; produced by the following code:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{testing\_output }\OtherTok{\textless{}{-}} \FunctionTok{higdon.1.data}\NormalTok{(testing\_input)}
+\FunctionTok{plot}\NormalTok{(testing\_input, model.predict}\SpecialCharTok{$}\NormalTok{mean,}\AttributeTok{type=}\StringTok{\textquotesingle{}l\textquotesingle{}}\NormalTok{, }\AttributeTok{col=}\StringTok{\textquotesingle{}blue\textquotesingle{}}\NormalTok{,}
+     \AttributeTok{xlab=}\StringTok{\textquotesingle{}input\textquotesingle{}}\NormalTok{, }\AttributeTok{ylab=}\StringTok{\textquotesingle{}output\textquotesingle{}}\NormalTok{)}
+\FunctionTok{polygon}\NormalTok{( }\FunctionTok{c}\NormalTok{(testing\_input,}\FunctionTok{rev}\NormalTok{(testing\_input)), }\FunctionTok{c}\NormalTok{(model.predict}\SpecialCharTok{$}\NormalTok{lower95,}
+                                                \FunctionTok{rev}\NormalTok{(model.predict}\SpecialCharTok{$}\NormalTok{upper95)), }\AttributeTok{col =} \StringTok{"grey80"}\NormalTok{, }\AttributeTok{border =}\NormalTok{ F)}
+\FunctionTok{lines}\NormalTok{(testing\_input, testing\_output)}
+\FunctionTok{lines}\NormalTok{(testing\_input,model.predict}\SpecialCharTok{$}\NormalTok{mean, }\AttributeTok{type=}\StringTok{\textquotesingle{}l\textquotesingle{}}\NormalTok{, }\AttributeTok{col=}\StringTok{\textquotesingle{}blue\textquotesingle{}}\NormalTok{)}
+\FunctionTok{lines}\NormalTok{(input, output, }\AttributeTok{type=}\StringTok{\textquotesingle{}p\textquotesingle{}}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{figure}
+\centering
+\pandocbounded{\includegraphics[keepaspectratio]{DiceKriging_vs_RobustGaSP_gu19_files/figure-latex/unnamed-chunk-4-1.pdf}}
+\caption{Figure 2}
+\end{figure}
+
+It is also possible to sample from the predictive distribution (which is
+a multivariate \$ distribution) using the following code:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{model.sample }\OtherTok{\textless{}{-}}\NormalTok{ RobustGaSP}\SpecialCharTok{::}\FunctionTok{simulate}\NormalTok{(model, testing\_input, }\AttributeTok{num\_sample=}\DecValTok{10}\NormalTok{)}
+\FunctionTok{matplot}\NormalTok{(testing\_input, model.sample, }\AttributeTok{type=}\StringTok{\textquotesingle{}l\textquotesingle{}}\NormalTok{, }\AttributeTok{xlab=}\StringTok{\textquotesingle{}input\textquotesingle{}}\NormalTok{, }\AttributeTok{ylab=}\StringTok{\textquotesingle{}output\textquotesingle{}}\NormalTok{)}
+\FunctionTok{lines}\NormalTok{(input, output,}\AttributeTok{type=}\StringTok{\textquotesingle{}p\textquotesingle{}}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{figure}
+\centering
+\pandocbounded{\includegraphics[keepaspectratio]{DiceKriging_vs_RobustGaSP_gu19_files/figure-latex/unnamed-chunk-5-1.pdf}}
+\caption{Figure 3}
+\end{figure}
+
+The plots of 10 posterior predictive samples are shown in Figure 3.
+
+\newpage
+
+\section{Identification of inert
+inputs}\label{identification-of-inert-inputs}
+
+We use 40 maximin LH samples to find inert inputs at the borehole
+function through the following code.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{set.seed}\NormalTok{(}\DecValTok{1}\NormalTok{)}
+\NormalTok{input }\OtherTok{\textless{}{-}} \FunctionTok{maximinLHS}\NormalTok{(}\AttributeTok{n=}\DecValTok{40}\NormalTok{, }\AttributeTok{k=}\DecValTok{8}\NormalTok{) }\CommentTok{\# maximin lhd sample}
+
+\CommentTok{\# rescale the design to the domain of the borehole function}
+\NormalTok{LB }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\FloatTok{0.05}\NormalTok{, }\DecValTok{100}\NormalTok{, }\DecValTok{63070}\NormalTok{, }\DecValTok{990}\NormalTok{, }\FloatTok{63.1}\NormalTok{, }\DecValTok{700}\NormalTok{, }\DecValTok{1120}\NormalTok{, }\DecValTok{9855}\NormalTok{)}
+\NormalTok{UB }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\FloatTok{0.15}\NormalTok{, }\DecValTok{50000}\NormalTok{, }\DecValTok{115600}\NormalTok{, }\DecValTok{1110}\NormalTok{, }\DecValTok{116}\NormalTok{, }\DecValTok{820}\NormalTok{, }\DecValTok{1680}\NormalTok{, }\DecValTok{12045}\NormalTok{)}
+\NormalTok{range }\OtherTok{\textless{}{-}}\NormalTok{ UB }\SpecialCharTok{{-}}\NormalTok{ LB}
+\ControlFlowTok{for}\NormalTok{(i }\ControlFlowTok{in} \DecValTok{1}\SpecialCharTok{:}\DecValTok{8}\NormalTok{) \{}
+\NormalTok{  input[,i] }\OtherTok{=}\NormalTok{ LB[i] }\SpecialCharTok{+}\NormalTok{ range[i] }\SpecialCharTok{*}\NormalTok{ input[,i]}
+\NormalTok{\}}
+\NormalTok{num\_obs }\OtherTok{\textless{}{-}} \FunctionTok{dim}\NormalTok{(input)[}\DecValTok{1}\NormalTok{]}
+\NormalTok{output }\OtherTok{\textless{}{-}} \FunctionTok{matrix}\NormalTok{(}\DecValTok{0}\NormalTok{,num\_obs,}\DecValTok{1}\NormalTok{)}
+\ControlFlowTok{for}\NormalTok{(i }\ControlFlowTok{in} \DecValTok{1}\SpecialCharTok{:}\NormalTok{num\_obs) \{}
+\NormalTok{  output[i] }\OtherTok{\textless{}{-}} \FunctionTok{borehole}\NormalTok{(input[i,])}
+\NormalTok{  \}}
+\NormalTok{m }\OtherTok{\textless{}{-}} \FunctionTok{rgasp}\NormalTok{(}\AttributeTok{design =}\NormalTok{ input, }\AttributeTok{response =}\NormalTok{ output, }\AttributeTok{lower\_bound=}\ConstantTok{FALSE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## The upper bounds of the range parameters are Inf Inf Inf Inf Inf Inf Inf Inf 
+## The initial values of range parameters are 0.001059729 0.01999988 0.01999989 0.01995154 0.01988913 0.01995062 0.01998942 0.01999727 
+## Start of the optimization  1  : 
+## The number of iterations is  28 
+##  The value of the  marginal posterior  function is  -292.7766 
+##  Optimized range parameters are 88013142983121819520402420660066004222040222424068222804286208062480240608240004600444042008884642808668828060064042000482242664 Inf Inf Inf Inf Inf Inf Inf 
+##  Optimized nugget parameter is 0 
+##  Convergence:  FALSE 
+## The initial values of range parameters are 0.6233334 310593 329576.8 754.7742 329.4202 740.7992 3462.103 13436.26 
+## Start of the optimization  2  : 
+## The number of iterations is  67 
+##  The value of the  marginal posterior  function is  -127.4453 
+##  Optimized range parameters are 0.1950828 15754792663288 146077093533443 771.5979 41857.69 873.9928 3578.772 38991.98 
+##  Optimized nugget parameter is 0 
+##  Convergence:  TRUE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{P }\OtherTok{\textless{}{-}} \FunctionTok{findInertInputs}\NormalTok{(m)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## The estimated normalized inverse range parameters are : 4.031267 0.00000002487248 0.000000002846522 1.234145 0.009929219 1.069382 1.220523 0.4347538 
+## The inputs  2 3 5 are suspected to be inert inputs
+\end{verbatim}
+
+Similar to the automatic relevance determination model in neural
+networks, e.g.~MacKay (1996); Neal (1996), and in machine learning,
+e.g.~Tipping (2001); Li et al.~(2002), the function
+\texttt{findInertInputs} of the \texttt{RobustGaSP} package indicates
+that the 2nd, 3rd, and 5th inputs are suspected to be inert inputs.
+Figure 4 presents the plots of the borehole function when varying one
+input at a time. This analyzes the local sensitivity of an input when
+having the others fixed. Indeed, the output of the borehole function
+changes very little when the 2nd, 3rd, and 5th inputs vary.
+
+\newpage
+
+\section{Noisy outputs}\label{noisy-outputs}
+
+Using only the influential inputs of the borehole function, we construct
+the GaSP emulator with a nugget based on 30 maximin LH samples through
+the following code:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{m.subset }\OtherTok{\textless{}{-}} \FunctionTok{rgasp}\NormalTok{(}\AttributeTok{design =}\NormalTok{ input[ ,}\FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{,}\DecValTok{4}\NormalTok{,}\DecValTok{6}\NormalTok{,}\DecValTok{7}\NormalTok{,}\DecValTok{8}\NormalTok{)], }\AttributeTok{response =}\NormalTok{ output,}
+                  \AttributeTok{nugget.est=}\ConstantTok{TRUE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## The upper bounds of the range parameters are 19.34479 23423.98 22990.27 107444.3 416986.6 Inf 
+## The initial values of range parameters are 0.3868958 468.4796 459.8055 2148.887 8339.732 
+## Start of the optimization  1  : 
+## The number of iterations is  45 
+##  The value of the  marginal posterior  function is  -126.1572 
+##  Optimized range parameters are 0.1836021 693.1441 777.1468 3167.149 33145.77 
+##  Optimized nugget parameter is 0.000000000000003253473 
+##  Convergence:  TRUE 
+## The initial values of range parameters are 0.2240224 271.2614 266.2389 1244.26 4828.915 
+## Start of the optimization  2  : 
+## The number of iterations is  45 
+##  The value of the  marginal posterior  function is  -126.1572 
+##  Optimized range parameters are 0.1836022 693.1457 777.1462 3167.157 33145.8 
+##  Optimized nugget parameter is 0.000000000000005056662 
+##  Convergence:  TRUE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{m.subset}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Call:
+## rgasp(design = input[, c(1, 4, 6, 7, 8)], response = output, 
+##     nugget.est = TRUE)
+## Mean parameters:  142.1235 
+## Variance parameter:  76967.69 
+## Range parameters:  0.1836021 693.1441 777.1468 3167.149 33145.77 
+## Noise parameter:  0.0000000002504123
+\end{verbatim}
+
+To compare the performance of the emulator with and without a noise
+term, we perform some out-of-sample testing. We build the GaSP emulator
+by the \texttt{RobustGaSP} package and the \texttt{DiceKriging} package
+using the same mean and covariance. In \texttt{RobustGaSP}, the
+parameters in the correlation functions are estimated by marginal
+posterior modes with the robust parameterisation, while in
+\texttt{DiceKriging}, parameters are estimated by MLE with upper and
+lower bounds. We first construct these four emulators with the following
+code
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{m.full }\OtherTok{\textless{}{-}} \FunctionTok{rgasp}\NormalTok{(}\AttributeTok{design =}\NormalTok{ input, }\AttributeTok{response =}\NormalTok{ output)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## The upper bounds of the range parameters are 123.6899 61631867 65398881 149772 65367.81 146999 686995.2 2666197 
+## The initial values of range parameters are 2.473797 1232637 1307978 2995.441 1307.356 2939.979 13739.9 53323.94 
+## Start of the optimization  1  : 
+## The number of iterations is  31 
+##  The value of the  marginal posterior  function is  -127.7353 
+##  Optimized range parameters are 0.1932037 61631867 65398881 709.2224 31879.72 806.2708 3478.621 33796.16 
+##  Optimized nugget parameter is 0 
+##  Convergence:  TRUE 
+## The initial values of range parameters are 0.6233334 310593 329576.8 754.7742 329.4202 740.7992 3462.103 13436.26 
+## Start of the optimization  2  : 
+## The number of iterations is  31 
+##  The value of the  marginal posterior  function is  -127.7353 
+##  Optimized range parameters are 0.1932036 61631867 65398881 709.2223 31879.86 806.2717 3478.621 33796.2 
+##  Optimized nugget parameter is 0 
+##  Convergence:  TRUE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{m.subset }\OtherTok{\textless{}{-}} \FunctionTok{rgasp}\NormalTok{(}\AttributeTok{design =}\NormalTok{ input[ ,}\FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{,}\DecValTok{4}\NormalTok{,}\DecValTok{6}\NormalTok{,}\DecValTok{7}\NormalTok{,}\DecValTok{8}\NormalTok{)], }\AttributeTok{response =}\NormalTok{ output,}
+                  \AttributeTok{nugget.est=}\ConstantTok{TRUE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## The upper bounds of the range parameters are 19.34479 23423.98 22990.27 107444.3 416986.6 Inf 
+## The initial values of range parameters are 0.3868958 468.4796 459.8055 2148.887 8339.732 
+## Start of the optimization  1  : 
+## The number of iterations is  45 
+##  The value of the  marginal posterior  function is  -126.1572 
+##  Optimized range parameters are 0.1836021 693.1441 777.1468 3167.149 33145.77 
+##  Optimized nugget parameter is 0.000000000000003253473 
+##  Convergence:  TRUE 
+## The initial values of range parameters are 0.2240224 271.2614 266.2389 1244.26 4828.915 
+## Start of the optimization  2  : 
+## The number of iterations is  45 
+##  The value of the  marginal posterior  function is  -126.1572 
+##  Optimized range parameters are 0.1836022 693.1457 777.1462 3167.157 33145.8 
+##  Optimized nugget parameter is 0.000000000000005056662 
+##  Convergence:  TRUE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dk.full }\OtherTok{\textless{}{-}} \FunctionTok{km}\NormalTok{(}\AttributeTok{design =}\NormalTok{ input, }\AttributeTok{response =}\NormalTok{ output)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## optimisation start
+## ------------------
+## * estimation method   : MLE 
+## * optimisation method : BFGS 
+## * analytical gradient : used
+## * trend model : ~1
+## * covariance model : 
+##   - type :  matern5_2 
+##   - nugget : NO
+##   - parameters lower bounds :  0.0000000001 0.0000000001 0.0000000001 0.0000000001 0.0000000001 0.0000000001 0.0000000001 0.0000000001 
+##   - parameters upper bounds :  0.1959501 97637.49 103605.2 237.2696 103.556 232.8764 1088.341 4223.802 
+##   - best initial criterion value(s) :  -175.6162 
+## 
+## N = 8, M = 5 machine precision = 2.22045e-16
+## At X0, 0 variables are exactly at the bounds
+## At iterate     0  f=       175.62  |proj g|=      0.16924
+## At iterate     1  f =        172.3  |proj g|=      0.073955
+## At iterate     2  f =       171.83  |proj g|=      0.065994
+## At iterate     3  f =       171.66  |proj g|=       0.14412
+## At iterate     4  f =        171.6  |proj g|=      0.057194
+## At iterate     5  f =        171.6  |proj g|=      0.056321
+## At iterate     6  f =        171.6  |proj g|=      0.051184
+## At iterate     7  f =        171.6  |proj g|=      0.056248
+## At iterate     8  f =        171.6  |proj g|=      0.056325
+## At iterate     9  f =        171.6  |proj g|=      0.056448
+## At iterate    10  f =        171.6  |proj g|=      0.056649
+## At iterate    11  f =        171.6  |proj g|=      0.056975
+## At iterate    12  f =        171.6  |proj g|=      0.057508
+## At iterate    13  f =       171.59  |proj g|=      0.058376
+## At iterate    14  f =       171.57  |proj g|=      0.059816
+## At iterate    15  f =       171.51  |proj g|=      0.062152
+## At iterate    16  f =       171.36  |proj g|=      0.065673
+## At iterate    17  f =       171.11  |proj g|=      0.067085
+## At iterate    18  f =        170.9  |proj g|=      0.060556
+## At iterate    19  f =       170.87  |proj g|=       0.13976
+## At iterate    20  f =       170.87  |proj g|=      0.057084
+## At iterate    21  f =       170.87  |proj g|=     0.0085229
+## At iterate    22  f =       170.87  |proj g|=     0.0085225
+## 
+## iterations 22
+## function evaluations 26
+## segments explored during Cauchy searches 23
+## BFGS updates skipped 0
+## active bounds at final generalized Cauchy point 1
+## norm of the final projected gradient 0.00852255
+## final function value 170.867
+## 
+## F = 170.867
+## final  value 170.866677 
+## converged
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{dk.subset }\OtherTok{\textless{}{-}} \FunctionTok{km}\NormalTok{(}\AttributeTok{design =}\NormalTok{ input[ ,}\FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{,}\DecValTok{4}\NormalTok{,}\DecValTok{6}\NormalTok{,}\DecValTok{7}\NormalTok{,}\DecValTok{8}\NormalTok{)], }\AttributeTok{response =}\NormalTok{ output,}
+                \AttributeTok{nugget.estim=}\ConstantTok{TRUE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## optimisation start
+## ------------------
+## * estimation method   : MLE 
+## * optimisation method : BFGS 
+## * analytical gradient : used
+## * trend model : ~1
+## * covariance model : 
+##   - type :  matern5_2 
+##   - nugget : unknown homogenous nugget effect 
+##   - parameters lower bounds :  0.0000000001 0.0000000001 0.0000000001 0.0000000001 0.0000000001 
+##   - parameters upper bounds :  0.1959501 237.2696 232.8764 1088.341 4223.802 
+##   - upper bound for alpha   :  1 
+##   - best initial criterion value(s) :  -200.1697 
+## 
+## N = 6, M = 5 machine precision = 2.22045e-16
+## At X0, 0 variables are exactly at the bounds
+## At iterate     0  f=       200.17  |proj g|=      0.84835
+## At iterate     1  f =       175.57  |proj g|=       0.31708
+## At iterate     2  f =       145.53  |proj g|=       0.15171
+## ys=-2.211e+02  -gs= 1.281e+01, BFGS update SKIPPED
+## At iterate     3  f =       142.16  |proj g|=      0.094111
+## At iterate     4  f =       141.94  |proj g|=      0.087472
+## At iterate     5  f =       141.84  |proj g|=       0.11877
+## At iterate     6  f =       141.83  |proj g|=      0.079792
+## At iterate     7  f =       141.83  |proj g|=      0.051442
+## At iterate     8  f =       141.83  |proj g|=      0.051438
+## At iterate     9  f =       141.83  |proj g|=      0.051438
+## 
+## iterations 9
+## function evaluations 13
+## segments explored during Cauchy searches 11
+## BFGS updates skipped 1
+## active bounds at final generalized Cauchy point 1
+## norm of the final projected gradient 0.0514375
+## final function value 141.829
+## 
+## F = 141.829
+## final  value 141.828536 
+## converged
+\end{verbatim}
+
+We then compare the performance of the four different emulators at 100
+random inputs for the borehole function.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{set.seed}\NormalTok{(}\DecValTok{1}\NormalTok{)}
+\NormalTok{dim\_inputs }\OtherTok{\textless{}{-}} \FunctionTok{dim}\NormalTok{(input)[}\DecValTok{2}\NormalTok{]}
+\NormalTok{num\_testing\_input }\OtherTok{\textless{}{-}} \DecValTok{100}
+\NormalTok{testing\_input }\OtherTok{\textless{}{-}} \FunctionTok{matrix}\NormalTok{(}\FunctionTok{runif}\NormalTok{(num\_testing\_input}\SpecialCharTok{*}\NormalTok{dim\_inputs),}
+\NormalTok{                        num\_testing\_input,dim\_inputs)}
+\ControlFlowTok{for}\NormalTok{(i }\ControlFlowTok{in} \DecValTok{1}\SpecialCharTok{:}\DecValTok{8}\NormalTok{) \{}
+\NormalTok{  testing\_input[,i] }\OtherTok{\textless{}{-}}\NormalTok{ LB[i] }\SpecialCharTok{+}\NormalTok{ range[i] }\SpecialCharTok{*}\NormalTok{ testing\_input[,i]}
+\NormalTok{\}}
+\NormalTok{m.full.predict }\OtherTok{\textless{}{-}} \FunctionTok{predict}\NormalTok{(m.full, testing\_input)}
+\NormalTok{m.subset.predict }\OtherTok{\textless{}{-}} \FunctionTok{predict}\NormalTok{(m.subset, testing\_input[ ,}\FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{,}\DecValTok{4}\NormalTok{,}\DecValTok{6}\NormalTok{,}\DecValTok{7}\NormalTok{,}\DecValTok{8}\NormalTok{)])}
+\NormalTok{dk.full.predict }\OtherTok{\textless{}{-}} \FunctionTok{predict}\NormalTok{(dk.full, }\AttributeTok{newdata =}\NormalTok{ testing\_input,}\AttributeTok{type =} \StringTok{\textquotesingle{}UK\textquotesingle{}}\NormalTok{, }\AttributeTok{checkNames =}\NormalTok{ F)}
+\NormalTok{dk.subset.predict }\OtherTok{\textless{}{-}} \FunctionTok{predict}\NormalTok{(dk.subset,}
+                             \AttributeTok{newdata =}\NormalTok{ testing\_input[ ,}\FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{,}\DecValTok{4}\NormalTok{,}\DecValTok{6}\NormalTok{,}\DecValTok{7}\NormalTok{,}\DecValTok{8}\NormalTok{)],}\AttributeTok{type =} \StringTok{\textquotesingle{}UK\textquotesingle{}}\NormalTok{, }\AttributeTok{checkNames =}\NormalTok{ F)}
+\NormalTok{testing\_output }\OtherTok{\textless{}{-}} \FunctionTok{matrix}\NormalTok{(}\DecValTok{0}\NormalTok{, num\_testing\_input, }\DecValTok{1}\NormalTok{)}
+\ControlFlowTok{for}\NormalTok{(i }\ControlFlowTok{in} \DecValTok{1}\SpecialCharTok{:}\NormalTok{num\_testing\_input) \{}
+\NormalTok{  testing\_output[i] }\OtherTok{\textless{}{-}} \FunctionTok{borehole}\NormalTok{(testing\_input[i, ])}
+\NormalTok{  \}}
+\NormalTok{m.full.error }\OtherTok{\textless{}{-}} \FunctionTok{abs}\NormalTok{(m.full.predict}\SpecialCharTok{$}\NormalTok{mean }\SpecialCharTok{{-}}\NormalTok{ testing\_output)}
+\NormalTok{m.subset.error }\OtherTok{\textless{}{-}} \FunctionTok{abs}\NormalTok{(m.subset.predict}\SpecialCharTok{$}\NormalTok{mean }\SpecialCharTok{{-}}\NormalTok{ testing\_output)}
+\NormalTok{dk.full.error }\OtherTok{\textless{}{-}} \FunctionTok{abs}\NormalTok{(dk.full.predict}\SpecialCharTok{$}\NormalTok{mean }\SpecialCharTok{{-}}\NormalTok{ testing\_output)}
+\NormalTok{dk.subset.error }\OtherTok{\textless{}{-}} \FunctionTok{abs}\NormalTok{(dk.subset.predict}\SpecialCharTok{$}\NormalTok{mean }\SpecialCharTok{{-}}\NormalTok{ testing\_output)}
+\end{Highlighting}
+\end{Shaded}
+
+Since the DiceKriging package seems not to have implemented a method to
+estimate the noise parameter, we only compare it with the nugget case.
+The box plot of the absolute errors of these 4 emulators (all with the
+same correlation and mean function) at 100 held-out points are shown in
+Figure 5. The performance of the RobustGaSP package based on the full
+set of inputs or only influential inputs with a noise is similar, and
+they are both better than the predictions from the DiceKriging package.
+
+\end{document}

@@ -1,0 +1,456 @@
+---
+title: "DiceKriging vs RobustGaSP: 1D example"
+date: ""
+output: pdf_document
+fontsize: 10pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RobustGaSP)
+library(DiceKriging)
+library(knitr)
+options(scipen=999)
+```
+
+```{r, echo=F}
+#------------------------
+# a 1 dimensional example
+#------------------------
+# dimensional of the inputs
+dim_inputs <- 1    
+# number of the inputs
+num_obs <- 5
+# uniform samples of design
+input <- matrix(seq(0.1, 0.9, length.out=num_obs), num_obs)
+# Following codes use maximin Latin Hypercube Design, which is typically better than uniform
+# library(lhs)
+# input <- maximinLHS(n=num_obs, k=dim_inputs)  ##maximin lhd sample
+
+# outputs from 2sin(3x)
+test_function_1D <- function(x) {
+  2*sin(3*x - 0.5)
+  }
+output <- matrix(test_function_1D(input), num_obs)
+```
+
+We have a `r dim_inputs`-dimensional input, one output, and `r num_obs` noise-free observations, obtained using the function $f(x) = 2\sin(3x - 0.5)$:
+
+\begin{equation*}
+x = \{`r input`\}
+\end{equation*}
+\begin{equation*}
+y = \{`r round(output,2)`\}
+\end{equation*}
+
+which, when plotted, look like this:
+
+```{r, echo=F, fig.height=5, fig.width=5, fig.align="center"}
+plot(output ~ input, xlim = c(0,1), pch=19, col = "blue")
+```
+
+We fit an emulator using the `rgasp()` function in the `RobustGaSP` package:
+
+```{r, echo=F}
+# number of points to be predicted 
+num_testing_input <- 1000
+# generate points to be predicted
+testing_input <- matrix(sort(runif(num_testing_input*dim_inputs)), num_testing_input,dim_inputs)
+```
+
+```{r, eval=F}
+rgasp(design = input,
+      response = output,
+      trend = H_matrix,
+      lower_bound=FALSE,
+      kernel_type = 'pow_exp', alpha = 2,
+      zero.mean = "No"
+      )
+```
+
+Here, a constant "mean basis" has been used, with "no constraint on optimization" (as per the `RobustGaSP` package manual). A Gaussian (squared exponential) kernel has been used, and linear mean prior function.
+
+\textcolor{teal}{Should `zero.mean` equal "No"?}
+
+We get the following output:
+
+```{r, echo=FALSE}
+H_matrix <- cbind(c(rep(1, num_obs)), input)
+```
+
+```{r, echo=F}
+gp_RG_gauss<- rgasp(design = input, 
+                    response = output,
+                    trend = H_matrix,
+                    lower_bound=FALSE,
+                    kernel_type = 'pow_exp', alpha = 2,
+                    zero.mean = "No"
+                    )
+# Perform prediction
+RG_gauss.predict<-predict(gp_RG_gauss, testing_input, 
+                    testing_trend = cbind(c(rep(1, num_testing_input)), testing_input),
+                    outasS3 = FALSE)
+# Predictive mean
+# RG_gauss.predict@mean
+```
+
+Contrast this with using a Matern 5/2 instead:
+
+```{r, echo=F}
+gp_RG_matern52<- rgasp(design = input, 
+                    response = output,
+                    trend = H_matrix,
+                    lower_bound=FALSE,
+                    zero.mean = "No"
+                    )
+# Perform prediction
+RG_matern52.predict<-predict(gp_RG_matern52, testing_input, 
+                    testing_trend = cbind(c(rep(1, num_testing_input)), testing_input),
+                    outasS3 = FALSE)
+```
+
+\textcolor{teal}{What are the two sets of optimisations here? Is it a problem that we sometimes get} `TRUE` \textcolor{teal}{for both, sometimes only for one?}
+
+\newpage
+
+The posterior mean function for both kernels, as well as that obtained using both kernels in `DiceKriging`'s `km()` function, again with a linear mean prior function, are shown in Figure 1.
+
+```{r, echo=F, include=F}
+gp_DK_gauss<- km(~.,
+                 input,
+                 output,
+                 covtype="gauss",
+                 optim.method="BFGS",
+                 control=list(maxit=500)
+                 )
+# Perform prediction
+DK_gauss.predict<-predict(gp_DK_gauss, testing_input, "SK", checkNames = F)
+
+gp_DK_matern52<- km(~.,
+                 input,
+                 output,
+                 covtype="matern5_2",
+                 optim.method="BFGS",
+                 control=list(maxit=500)
+                 )
+# Perform prediction
+DK_matern52.predict<-predict(gp_DK_matern52, testing_input, "SK", checkNames = F)
+```
+
+```{r RB_vs_DK, figures-side, fig.show="hold", out.width="50%", fig.cap="Top: RobustGaSP with Gauss kernel (left) and Matern 5/2 (right). Bottom: DiceKriging with Gauss kernel (left) and Matern 5/2 (right).", echo=F}
+plot1_function <- function(posterior_mean, posterior_lower95, posterior_upper95){
+  plot(testing_input, test_function_1D(testing_input),
+       main="",
+       xlab="input",
+       ylab="output",
+       type="l",
+       col="black",
+       ylim=c(-1.1, 2.1)
+       )
+  lines(testing_input,posterior_mean, col="red")
+  lines(testing_input,posterior_lower95, col="red", lty = "dashed")
+  lines(testing_input,posterior_upper95, col="red", lty = "dashed")
+  points(input, output, pch=19, col="blue")
+  legend("topleft",
+         c("actual","observations","prediction"),
+         fill=c("black","blue","red")
+  )
+}
+
+par(mar = c(4, 4, .1, .1))
+plot1_function(RG_gauss.predict@mean, RG_gauss.predict@lower95, RG_gauss.predict@upper95)
+plot1_function(RG_matern52.predict@mean, RG_matern52.predict@lower95, RG_matern52.predict@upper95)
+plot1_function(DK_gauss.predict$mean, DK_gauss.predict$lower95, DK_gauss.predict$upper95)
+plot1_function(DK_matern52.predict$mean, DK_matern52.predict$lower95, DK_matern52.predict$upper95)
+```
+
+Various checks are performed (as in the example from `RobustGaSP`'s Help page):
+
+```{r prop_in_cred_int, echo=F}
+# proportion covered by 95% posterior predictive credible interval
+testing_output <- matrix(0,num_testing_input,1)
+for(i in 1:num_testing_input){
+  testing_output[i]<-test_function_1D(testing_input[i,])
+}
+prop_emulator_function <- function(posterior_lower95, posterior_upper95){
+  length(which((posterior_lower95<=testing_output)
+                              &(posterior_upper95>=testing_output)))/num_testing_input
+}
+
+prop_emulator_RG_gauss <- prop_emulator_function(RG_gauss.predict@lower95, RG_gauss.predict@upper95)
+prop_emulator_RG_matern52 <- prop_emulator_function(RG_matern52.predict@lower95, RG_matern52.predict@upper95)
+prop_emulator_DK_gauss <- prop_emulator_function(DK_gauss.predict$lower95, DK_gauss.predict$upper95)
+prop_emulator_DK_matern52 <- prop_emulator_function(DK_matern52.predict$lower95, DK_matern52.predict$upper95)
+```
+
+```{r MSE, echo=F}
+# out of sample MSE
+MSE_emulator_function <- function(posterior_mean){
+  sum((posterior_mean-testing_output)^2)/(num_testing_input)
+}
+
+MSE_emulator_RG_gauss <- MSE_emulator_function(RG_gauss.predict@mean)
+MSE_emulator_RG_matern52 <- MSE_emulator_function(RG_matern52.predict@mean)
+MSE_emulator_DK_gauss <- MSE_emulator_function(DK_gauss.predict$mean)
+MSE_emulator_DK_matern52 <- MSE_emulator_function(DK_matern52.predict$mean)
+```
+
+```{r length_of_cred_int, echo=F}
+# average length of posterior predictive credible interval
+lengthCI_emulator_function <- function(posterior_lower95, posterior_upper95){
+  sum(posterior_upper95 - posterior_lower95)/num_testing_input
+}
+
+lengthCI_emulator_RG_gauss <- lengthCI_emulator_function(RG_gauss.predict@lower95, RG_gauss.predict@upper95)
+lengthCI_emulator_RG_matern52 <- lengthCI_emulator_function(RG_matern52.predict@lower95, RG_matern52.predict@upper95)
+lengthCI_emulator_DK_gauss <- lengthCI_emulator_function(DK_gauss.predict$lower95, DK_gauss.predict$upper95)
+lengthCI_emulator_DK_matern52 <- lengthCI_emulator_function(DK_matern52.predict$lower95, DK_matern52.predict$upper95)
+```
+
+```{r, echo=F}
+RG_vs_DK_summary <- data.frame(
+  cbind(
+    c(rep("RobustGaSP",2), rep("DiceKriging",2)),
+    rep(c("Gauss", "Matern 5/2"), 2),
+    c(round(prop_emulator_RG_gauss,2), round(prop_emulator_RG_matern52,2), round(prop_emulator_DK_gauss,2), round(prop_emulator_DK_matern52,2)),
+    c(signif(MSE_emulator_RG_gauss,1), signif(MSE_emulator_RG_matern52,1), signif(MSE_emulator_DK_gauss,1), signif(MSE_emulator_DK_matern52,1)),
+    c(round(lengthCI_emulator_RG_gauss,4), round(lengthCI_emulator_RG_matern52,4), round(lengthCI_emulator_DK_gauss,4), round(lengthCI_emulator_DK_matern52,4))
+    )
+  )
+colnames(RG_vs_DK_summary) <- c("Package", "Kernel", "Prop. w/n 95% CI", "Out-of-sample MSE", "Mean width of 95% CI")
+kable(RG_vs_DK_summary, align=c("l","l","c","c","c"))
+```
+
+Finally, the estimates returned by each of these four setups are shown below. For `RobustGaSP`, the Manual indicates that it returns "inverse-range parameters", so the inverse of these values have been found, resulting in $\ell_{RK}$ (first table below).
+
+```{r, echo=F}
+RG_gauss.trend0 <- gp_RG_gauss@theta_hat[1]
+RG_matern52.trend0 <- gp_RG_matern52@theta_hat[1]
+DK_gauss.trend0 <- gp_DK_gauss@trend.coef[1]
+DK_matern52.trend0 <- gp_DK_matern52@trend.coef[1]
+
+RG_gauss.trend1 <- gp_RG_gauss@theta_hat[2]
+RG_matern52.trend1 <- gp_RG_matern52@theta_hat[2]
+DK_gauss.trend1 <- gp_DK_gauss@trend.coef[2]
+DK_matern52.trend1 <- gp_DK_matern52@trend.coef[2]
+
+RG_gauss.range <- (1 / gp_RG_gauss@beta_hat) / sqrt(2)
+RG_matern52.range <- 1 / gp_RG_matern52@beta_hat
+DK_gauss.range <- gp_DK_gauss@covariance@range.val
+DK_matern52.range <- gp_DK_matern52@covariance@range.val
+
+RG_gauss.variance <- gp_RG_gauss@sigma2_hat
+RG_matern52.variance <- gp_RG_matern52@sigma2_hat
+DK_gauss.variance <- gp_DK_gauss@covariance@sd2
+DK_matern52.variance <- gp_DK_matern52@covariance@sd2
+```
+
+In the Gauss kernel case, the Manual for `RobustGaSP` indicates that the denominator of the fraction is $\ell_{RK}^2$ whereas for `DiceKriging` it's $2\ell_{DK}^2$. To facilitate direct comparison of the parameter estimates, we require a range parameter for `RobustGaSP`, $\ell$ which, when plugged into $2\ell^2$ results in $\ell_{RG}^2$. Therefore $$\ell = \frac{\ell_{RG}}{\sqrt{2}},$$ since $$2\left(\frac{\ell_{RG}}{\sqrt{2}}\right)^2 = 2\frac{\ell_{RG}}{2}^2 = \ell_{RG}^2,$$ shown in the second table below.
+
+```{r, echo=F}
+RG_vs_DK_estimates <- data.frame(
+  cbind(
+    c(rep("RobustGaSP",2), rep("DiceKriging",2)),
+    rep(c("Gauss", "Matern 5/2"), 2),
+    round(c(RG_gauss.trend0, RG_matern52.trend0, DK_gauss.trend0, DK_matern52.trend0),2),
+    round(c(RG_gauss.trend1, RG_matern52.trend1, DK_gauss.trend1, DK_matern52.trend1),2),
+    round(c(RG_gauss.range, RG_matern52.range, DK_gauss.range, DK_matern52.range),2),
+    round(c(RG_gauss.variance, RG_matern52.variance, DK_gauss.variance, DK_matern52.variance),2)
+    )
+  )
+colnames(RG_vs_DK_estimates) <- c("Package", "Kernel", "Trend 1", "Trend 2", "Range", "Variance")
+kable(RG_vs_DK_estimates, align=c("l","l","c","c","c","c"))
+```
+
+
+```{r, echo=F}
+RG_gauss.trend0 <- gp_RG_gauss@theta_hat[1]
+RG_matern52.trend0 <- gp_RG_matern52@theta_hat[1]
+DK_gauss.trend0 <- gp_DK_gauss@trend.coef[1]
+DK_matern52.trend0 <- gp_DK_matern52@trend.coef[1]
+
+RG_gauss.trend1 <- gp_RG_gauss@theta_hat[2]
+RG_matern52.trend1 <- gp_RG_matern52@theta_hat[2]
+DK_gauss.trend1 <- gp_DK_gauss@trend.coef[2]
+DK_matern52.trend1 <- gp_DK_matern52@trend.coef[2]
+
+RG_gauss.range <- (1 / gp_RG_gauss@beta_hat)
+RG_matern52.range <- 1 / gp_RG_matern52@beta_hat
+DK_gauss.range <- gp_DK_gauss@covariance@range.val
+DK_matern52.range <- gp_DK_matern52@covariance@range.val
+
+RG_gauss.variance <- gp_RG_gauss@sigma2_hat
+RG_matern52.variance <- gp_RG_matern52@sigma2_hat
+DK_gauss.variance <- gp_DK_gauss@covariance@sd2
+DK_matern52.variance <- gp_DK_matern52@covariance@sd2
+```
+
+```{r, echo=F}
+RG_vs_DK_estimates <- data.frame(
+  cbind(
+    c(rep("RobustGaSP",2), rep("DiceKriging",2)),
+    rep(c("Gauss", "Matern 5/2"), 2),
+    round(c(RG_gauss.trend0, RG_matern52.trend0, DK_gauss.trend0, DK_matern52.trend0),2),
+    round(c(RG_gauss.trend1, RG_matern52.trend1, DK_gauss.trend1, DK_matern52.trend1),2),
+    round(c(RG_gauss.range, RG_matern52.range, DK_gauss.range, DK_matern52.range),2),
+    round(c(RG_gauss.variance, RG_matern52.variance, DK_gauss.variance, DK_matern52.variance),2)
+    )
+  )
+colnames(RG_vs_DK_estimates) <- c("Package", "Kernel", "Trend 1", "Trend 2", "Range", "Variance")
+kable(RG_vs_DK_estimates, align=c("l","l","c","c","c","c"))
+```
+
+\textcolor{teal}{Are the range of values here worrying? Have I done everything correctly here?}
+
+## Verifying the estimates by-hand for both packages
+
+We already have matrix $H$ (defined earlier for use in the `rgasp` function's `trend` argument):
+
+```{r, echo=FALSE}
+H_matrix
+```
+
+We also need matrix $A$ and its inverse, built using the estimate of the range parameter.
+
+```{r, echo=F}
+lhat_vector <- gp_DK_gauss@covariance@range.val
+lhat_matrix <- matrix(lhat_vector)
+lhatinv_diag_matrix <- diag(x = 1/lhat_vector, nrow = dim_inputs)
+
+# We make the matrix A
+A_matrix <- matrix(NA, nrow = num_obs, ncol = num_obs)
+for (r in 1:num_obs) {
+  for (c in 1:num_obs) {
+    if (is.na(A_matrix[r,c])) {
+      A_matrix[r,c] <- A_matrix[c,r] <- 
+        exp(-0.5*
+              matrix(input[r,] - input[c,], nrow = 1) %*% ## MIGHT NEED AMENDING SINCE NOW WORKING WITH THE TRANSPOSE
+              (lhatinv_diag_matrix^2) %*%
+              matrix(input[r,] - input[c,], ncol = 1)
+        )
+    }
+  }
+}
+
+Ainv_matrix <- solve(A_matrix)
+```
+
+Finally, we need $\textbf{t}(x^{*})$ for all 1000 of the new inputs $x^{*}$.
+
+```{r, echo=F}
+txstar_T_matrix <- matrix(NA, nrow = num_testing_input, ncol = num_obs)
+for (r in 1:num_testing_input) {
+  for (c in 1:num_obs) {
+    txstar_T_matrix[r,c] <- exp(-0.5 *
+                                  matrix(testing_input[r,] - input[c,], nrow = 1) %*% 
+                                  (lhatinv_diag_matrix^2) %*%
+                                  matrix(testing_input[r,] - input[c,], ncol = 1)
+    )
+  }
+  # cat("txstarT: ", r, "/", num_testing_input, ",", sep = "")
+}
+```
+
+We're now ready to calculate posterior predictions for each of the new input settings, using the posterior estimates for the trend parameters (returned by `DiceKriging` using the Gauss kernel). By-hand predictions match those returned by `DiceKriging` (Figure 2).
+
+```{r, figures-side-DK, fig.show="hold", out.width="50%", fig.cap="The predictions found by-hand match well with those made by DiceKriging (left), with the latter minus the former found to be essentially zero (right).", echo=F}
+betahat_matrix <- matrix(gp_DK_gauss@trend.coef, nrow = dim_inputs+1)
+
+par(mar = c(4, 4, .1, .1))
+
+plot(output ~ input, xlim = c(0,1), ylim = c(-2,2), pch=19, col="blue",
+  )
+legend("topleft",
+      c("DiceKriging","by-hand","observations"),
+      fill=c("black","red","blue")
+      )
+
+DK_predictions <- predict(gp_DK_gauss, testing_input, "SK", checkNames=F)
+points(DK_predictions$mean ~ testing_input, pch=20, cex=0.75)
+
+my_predictions <- 
+  matrix(c(rep(1, num_testing_input), testing_input), nrow = num_testing_input, byrow = F) %*% 
+  betahat_matrix +
+  txstar_T_matrix %*% Ainv_matrix %*% (as.matrix(output, ncol = num_obs) - H_matrix %*% betahat_matrix)
+points(my_predictions ~ testing_input, pch=4, cex=0.25, col = "red")
+
+plot((DK_predictions$mean - as.vector(my_predictions)) ~ testing_input,
+     xlab = "input", ylab = "(DiceKring prediction) - (by-hand prediction)")
+points(rep(0,5) ~ input, pch = 19, col = "blue")
+
+my_predictions_DK <- my_predictions
+```
+
+This is repeated for `RobustGaSP` with the Gaussian kernel. The Manual says that it returns the *inverse* of the range parameters, so the ones returned here have had their inverses found. The Manual also indicates that there is not a 2 in the denominator of the Gauss kernel function, so this has also been removed. Again, by-hand predictions match those returned by `DiceKriging` (Figure 3).
+
+```{r, echo=F}
+lhat_vector <- 1 / gp_RG_gauss@beta_hat
+lhat_matrix <- matrix(lhat_vector)
+lhatinv_diag_matrix <- diag(x = 1/lhat_vector, nrow = dim_inputs)
+
+# We make the matrix A
+A_matrix <- matrix(NA, nrow = num_obs, ncol = num_obs)
+for (r in 1:num_obs) {
+  for (c in 1:num_obs) {
+    if (is.na(A_matrix[r,c])) {
+      A_matrix[r,c] <- A_matrix[c,r] <- 
+        exp(-1*
+              matrix(input[r,] - input[c,], nrow = 1) %*% ## MIGHT NEED AMENDING SINCE NOW WORKING WITH THE TRANSPOSE
+              (lhatinv_diag_matrix^2) %*%
+              matrix(input[r,] - input[c,], ncol = 1)
+        )
+    }
+  }
+}
+
+Ainv_matrix <- solve(A_matrix)
+
+txstar_T_matrix <- matrix(NA, nrow = num_testing_input, ncol = num_obs)
+for (r in 1:num_testing_input) {
+  for (c in 1:num_obs) {
+    txstar_T_matrix[r,c] <- exp(-1 *
+                                  matrix(testing_input[r,] - input[c,], nrow = 1) %*% 
+                                  (lhatinv_diag_matrix^2) %*%
+                                  matrix(testing_input[r,] - input[c,], ncol = 1)
+    )
+  }
+  # cat("txstarT: ", r, "/", num_testing_input, ",", sep = "")
+}
+```
+
+```{r, figures-side-RG, fig.show="hold", out.width="50%", fig.cap="The predictions found by-hand match well with those made by RobustGaSP (left), with the latter minus the former found to be essentially zero (right).", echo=F}
+betahat_matrix <- matrix(gp_RG_gauss@theta_hat, nrow = dim_inputs+1)
+
+par(mar = c(4, 4, .1, .1))
+
+plot(output ~ input, xlim = c(0,1), ylim = c(-2,2), pch=19, col="blue",
+  )
+legend("topleft",
+      c("RobustGaSP","by-hand","observations"),
+      fill=c("black","red","blue")
+      )
+
+RG_predictions <- RG_gauss.predict<-predict(gp_RG_gauss, testing_input, 
+                    testing_trend = cbind(c(rep(1, num_testing_input)), testing_input),
+                    outasS3 = FALSE)
+points(RG_predictions@mean ~ testing_input, pch=20, cex=0.75)
+
+my_predictions <- 
+  matrix(c(rep(1, num_testing_input), testing_input), nrow = num_testing_input, byrow = F) %*% 
+  betahat_matrix +
+  txstar_T_matrix %*% Ainv_matrix %*% (as.matrix(output, ncol = num_obs) - H_matrix %*% betahat_matrix)
+points(my_predictions ~ testing_input, pch=4, cex=0.25, col = "red")
+
+plot((RG_predictions@mean - as.vector(my_predictions)) ~ testing_input,
+     xlab = "input", ylab = "(RobustGaSP prediction) - (by-hand prediction)")
+points(rep(0,5) ~ input, pch = 19, col = "blue")
+
+my_predictions_RG <- my_predictions
+```
+
+For both we calculate the following: $$\frac{\Sigma_{i=1}^{1000}\left|\text{(predictions from package)}_{i} - \text{(predictions by-hand)}_{i}\right|}{10^{-8} \times 1000}$$ and get, for `DiceKriging` and `RobustGaSP` respectively:
+
+```{r, echo = F}
+sum(abs(DK_predictions$mean - as.vector(my_predictions_DK))) / (10^(-8)*num_testing_input)
+sum(abs(RG_predictions@mean - as.vector(my_predictions_RG))) / (10^(-8)*num_testing_input)
+```

@@ -4,7 +4,9 @@ Repository for storing everything connected to my PhD thesis
 
 ## Git tokens
 usethis::create_github_token()
+### to generate a token, then
 gitcreds::gitcreds_set()
+### to enable entering of token
 
 ## Removing files you don't want Git-ted
 git rm -r --cached .Rproj.user/**

@@ -1,0 +1,4 @@
+These files are large numpy arrays, which can be read in 
+np.load(filename)
+
+Each array has 13 months, 221 members, 144 ilats, 192 ilons

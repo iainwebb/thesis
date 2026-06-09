@@ -20,3 +20,7 @@ presentations/*
 data/ACURE-UKESM1-PPE-par-norm-Design.csv
 data/ACURE_P3_AOD_Total_jul.nc
 *.docx
+images
+*.png
+writeups/MSc_Dissertation
+objects_archived

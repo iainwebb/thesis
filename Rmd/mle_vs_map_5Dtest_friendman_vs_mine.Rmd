@@ -1,0 +1,747 @@
+---
+title: "`RobustGaSP`: MLE vs MAP estimation"
+author: "5D test example"
+date: "Friedman.5 vs my 5D function"
+output: 
+  pdf_document:
+      number_sections: true
+fontsize: 10pt
+header-includes:
+  - \usepackage{xcolor}
+  - \definecolor{mybgcolor}{HTML}{ffebf5}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RobustGaSP)
+# library(DiceKriging)
+library(knitr)
+library(readr)
+library(lhs)
+options(scipen=999)
+# source R scripts in
+for (f in setdiff(list.files(), 
+                  union(union(union(union(union(union(union(union(list.files(pattern="*.Rmd"), list.files(pattern="*.pdf")),list.files(pattern="*.db")), list.files(pattern="*_files")), list.files(pattern="*.tex")),list.files(pattern="*.log")),list.files(pattern="*.md")),list.files(pattern="*.html")),list.files(pattern="*archived"))
+                  )
+     ) 
+  {
+  source(f)
+}
+rm(f, "loo_validation_summary", "m_pred_plots")
+```
+
+<!-- \pagecolor{mybgcolor} -->
+
+```{r, echo=F}
+# dimensional of the inputs
+dim_inputs <- 5   
+# number of the inputs
+num_obs <- 10*dim_inputs
+# starting point for data
+start_point <- 0
+# lhs design
+input <- maximinLHS(n=num_obs, k=dim_inputs)  ##maximin lhd sample
+## Export 
+# write_lines(as.vector(input),
+#             file=
+#               paste0(
+#                 "U:/ManWin/My Documents/thesis/Rmd/objects_for_Rmd/input_",
+#                 dim_inputs,
+#                 "D_",
+#                 num_obs,
+#                 "obs.txt")
+#             )
+
+## Import
+input <-
+  matrix(as.numeric(readLines(paste0("U:/ManWin/My Documents/thesis/Rmd/objects_for_Rmd/input_", dim_inputs, "D_", num_obs, "obs.txt"))),
+         ncol = dim_inputs)
+```
+
+# Function 1: $$y = 10 \sin(\pi x_1 x_2) + 20(x_3 - 0.5)^2 + 10x_4 + 5x_5$$
+
+## Emulator fit and validation
+
+```{r, echo=F}
+
+# outputs
+
+output <- matrix(apply(input, 1, friedman.5.data), nrow = num_obs)
+
+```
+
+We have a `r dim_inputs`-dimensional input, one output, and `r num_obs` noise-free observations. We will assume a linear mean function of the form $m(x) = \beta_0 + \beta_1x_1 + \beta_2x_2 + \beta_3x_3 + \beta_4x_4 + \beta_5x_5.$ The Gauss (squared exponential) *and* Matern 5/2 kernels will be compared for both estimation methods.
+
+```{r, echo=FALSE}
+H <- H_maker(input)
+```
+
+```{r, include=F}
+m.mle.gauss <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No",
+                     kernel_type = 'pow_exp', alpha = rep(2, ncol(input)),        # squared exponential
+                     method = "mle"                                               # maximum likelihood estimation
+                     )
+
+m.mle.matern52 <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No",
+                     method = "mle"                                               # maximum likelihood estimation
+                     )
+
+m.map.gauss <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No",
+                     kernel_type = 'pow_exp', alpha = rep(2, ncol(input)),        # squared exponential
+                     )
+
+m.map.matern52 <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No"
+                     )
+```
+
+```{r testing-inputs, echo=F}
+# number of points to be predicted 
+num_testing_input <- 100
+
+# generate points to be predicted
+# testing_input <- maximinLHS(n=num_testing_input, k=dim_inputs)
+
+## Export 
+# write_lines(as.vector(testing_input),
+#             file=
+#               paste0(
+#                 "U:/ManWin/My Documents/thesis/Rmd/objects_for_Rmd/testing_input_",
+#                 dim_inputs,
+#                 "D_", num_testing_input, "newpts.txt")
+#             )
+
+## Import
+testing_input <-
+  matrix(as.numeric(readLines(paste0("U:/ManWin/My Documents/thesis/Rmd/objects_for_Rmd/testing_input_", dim_inputs, "D_", num_testing_input, "newpts.txt"))),
+         ncol = dim_inputs)
+```
+
+```{r, echo=F}
+H_testing <- H_maker(testing_input)
+```
+
+```{r perform-predictions, echo=F}
+m.mle.gauss.predict <- RobustGaSP::predict(m.mle.gauss, testing_input, testing_trend = H_testing)
+
+m.mle.matern52.predict <- RobustGaSP::predict(m.mle.matern52, testing_input, testing_trend = H_testing)
+
+m.map.gauss.predict <- RobustGaSP::predict(m.map.gauss, testing_input, testing_trend = H_testing)
+
+m.map.matern52.predict <- RobustGaSP::predict(m.map.matern52, testing_input, testing_trend = H_testing)
+```
+
+`r num_testing_input` new LH points are generated, and out-of-sample checks (as per `RobustGaSP`'s Help page) shown in Table 1, with the emulator predictions plotted against the actual outputs for these points shown in Figure 1.
+
+```{r, echo=F}
+# actual output values
+testing_output <- matrix(apply(testing_input, 1, friedman.5.data), nrow = num_testing_input)
+
+```
+
+```{r prop_in_cred_int, echo=F}
+# proportion covered by 95% posterior predictive credible interval
+
+# m.mle.gauss.95CIprop
+prop_wn_95CI_mle_gauss <- prop_wn_95CI(
+  m.mle.gauss.predict$lower95, m.mle.gauss.predict$upper95
+  )
+
+prop_wn_95CI_mle_matern52 <- prop_wn_95CI(
+  m.mle.matern52.predict$lower95, m.mle.matern52.predict$upper95
+  )
+
+prop_wn_95CI_map_gauss <- prop_wn_95CI(
+  m.map.gauss.predict$lower95, m.map.gauss.predict$upper95
+  )
+
+prop_wn_95CI_map_matern52 <- prop_wn_95CI(
+  m.map.matern52.predict$lower95, m.map.matern52.predict$upper95
+  )
+```
+
+```{r MSE, echo=F}
+# out of sample MSE
+
+MSE_emulator_mle_gauss <- 
+  MSE(m.mle.gauss.predict$mean, testing_output)
+
+MSE_emulator_mle_matern52 <- 
+  MSE(m.mle.matern52.predict$mean, testing_output)
+
+MSE_emulator_map_gauss <- 
+  MSE(m.map.gauss.predict$mean, testing_output)
+
+MSE_emulator_map_matern52 <- 
+  MSE(m.map.matern52.predict$mean, testing_output)
+```
+
+```{r length_of_cred_int, echo=F}
+# average length of posterior predictive credible interval
+
+length_95CI_map_gauss <- length_95CI(m.map.gauss.predict$lower95, m.map.gauss.predict$upper95)
+
+length_95CI_map_matern52 <- length_95CI(m.map.matern52.predict$lower95, m.map.matern52.predict$upper95)
+
+length_95CI_mle_gauss <- length_95CI(m.mle.gauss.predict$lower95, m.mle.gauss.predict$upper95)
+
+length_95CI_mle_matern52 <- length_95CI(m.mle.matern52.predict$lower95, m.mle.matern52.predict$upper95)
+```
+
+```{r checks-summary, echo=F}
+checks_per_estimation <- data.frame(
+  cbind(
+    c(rep("MLE",2), rep("MAP",2)),
+    rep(c("Gauss", "Matern 5/2"), 2),
+    round(c(prop_wn_95CI_mle_gauss, prop_wn_95CI_mle_matern52, prop_wn_95CI_map_gauss, prop_wn_95CI_map_matern52),2),
+    signif(c(MSE_emulator_mle_gauss, MSE_emulator_mle_matern52, MSE_emulator_map_gauss, MSE_emulator_map_matern52),1),
+    round(c(length_95CI_mle_gauss, length_95CI_mle_matern52, length_95CI_map_gauss, length_95CI_map_matern52),4)
+    )
+  )
+colnames(checks_per_estimation) <- c("Estimate method", "Kernel", "Prop. w/n 95% CI", "Out-of-sample MSE", "Mean width of 95% CI")
+kable(checks_per_estimation, 
+      align=c("l","l","c","c","c"),
+      caption = "Out-of-sample checks"
+      )
+```
+
+```{r, fig.show="hold", out.width="50%", fig.height=5, fig.cap="Emulator vs model for Gauss (left) and Matern 5/2 (right). Red: MLE. Blue: MAP", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+plot(testing_output, m.mle.gauss.predict$mean,
+     col="red", pch=19, cex=0.5,
+     xlab = "Model", ylab = "Emulator")
+points(testing_output, m.map.gauss.predict$mean,
+       col="blue", pch=19, cex=0.5)
+abline(0,1)
+
+plot(testing_output, m.mle.matern52.predict$mean,
+     col="red", pch=19, cex=0.5,
+     xlab = "Model", ylab = "Emulator")
+points(testing_output, m.map.matern52.predict$mean,
+     col="blue", pch=19, cex=0.5)
+abline(0,1)
+```
+
+Finally, in preparation for the real world data where we cannot perform out-of-sample validation, leave-one-out validation is carried out; 
+<!-- for each of the observations, fitting a GP using all observations except this one, then using the fitted emulator to predict the output at the excluded observation's input setting. The 95% credible interval for each prediction is checked against the actual output value, and  -->
+the results are shown in Figure 2.
+
+```{r, include=F}
+m_mle_loo(input, output, "gauss")
+m_mle_loo(input, output, "matern52")
+m_map_loo(input, output, "gauss")
+m_map_loo(input, output, "matern52")
+```
+
+```{r, validation-plots, fig.show="hold", out.width="50%", fig.height=5, fig.cap="LOO CV. Top: MLE with Gauss (left) and Matern 5/2 (right) kernels. Bottom: MAP.", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+# MLE plots
+loo_validation_plot(m.mle.gauss.loo)
+
+loo_validation_plot(m.mle.matern52.loo)
+
+# MAP plots
+loo_validation_plot(m.map.gauss.loo)
+
+loo_validation_plot(m.map.matern52.loo)
+
+```
+
+\newpage
+
+Going forward, for now, only the Gauss kernel is dealt with; Matern 5/2 will be returned to once I've figured out the estimates returned by the two packages and the derivative of the Matern 5/2 kernel. 
+
+```{r, echo=F}
+# parameter estimates
+
+m_ests(m.mle.gauss, "mle", "gauss")
+
+m_ests(m.map.gauss, "map", "gauss")
+```
+
+## Verifying the estimates by-hand for both estimation methods
+
+To calculate the posterior predictions at the `r num_testing_input` testing points by-hand, we require the matrix $H$ containing the inputs for the `r num_obs` observations and well as matrix $A$, its inverse, and $\textbf{t}(x^{*})$ for all `r num_obs` of the new inputs $x^{*}$. $A$ and $\textbf{t}(x^{*})$ are built using the estimate of the range parameter returned by each package. By-hand predictions match those returned by the two estimation methods (Figure 3).
+
+```{r, echo=F}
+# make A and A_inv
+
+# using range estimate(s) from MLE
+m.mle.gauss.A <- A_maker(input, m.mle.gauss.ranges)
+m.mle.gauss.A.inv <- solve(m.mle.gauss.A)
+
+# using range estimate(s) from MAP
+m.map.gauss.A <- A_maker(input, m.map.gauss.ranges)
+m.map.gauss.A.inv <- solve(m.map.gauss.A)
+
+# make t
+
+# using MLE range estimate(s)
+m.mle.gauss.t <- t_maker(input, testing_input, m.mle.gauss.ranges)
+
+# using MAP range estimate(s)
+m.map.gauss.t <- t_maker(input, testing_input, m.map.gauss.ranges)
+```
+
+```{r, fig.show="hold", out.width="50%", fig.cap="The predictions found by-hand match well with those made by both estimation methods (left), with the latter minus the former found to be essentially zero (right). Top: MLE. Bottom: MAP.", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+# MLE plots
+m.mle.gauss.predictbyhand <- byhand_preds(testing_input,
+                                   m.mle.gauss.trends,
+                                   m.mle.gauss.t,
+                                   m.mle.gauss.A.inv,
+                                   output,
+                                   H)
+
+m_pred_plots_2D(input, output, testing_input, m.mle.gauss.predict, m.mle.gauss.predictbyhand)
+
+# MAP plots
+m.map.gauss.predictbyhand <- byhand_preds(testing_input,
+                                   m.map.gauss.trends,
+                                   m.map.gauss.t,
+                                   m.map.gauss.A.inv,
+                                   output,
+                                   H)
+
+m_pred_plots_2D(input, output, testing_input, m.map.gauss.predict, m.map.gauss.predictbyhand)
+
+```
+
+```{r, echo = F}
+
+m.mle.gauss.score <- sum(abs(m.mle.gauss.predict$mean - as.vector(m.mle.gauss.predictbyhand))) / (10^(-8)*num_testing_input)
+
+m.map.gauss.score <- sum(abs(m.map.gauss.predict$mean - as.vector(m.map.gauss.predictbyhand))) / (10^(-8)*num_testing_input)
+```
+
+For both we calculate $$\dfrac{\sum\limits_{i=1}^{N}\Biggl|\text{(predictions from package)}_{i} - \text{(predictions by-hand)}_{i}\Biggr|}{N},$$ where $N$ is the number of test points, then divide this by $10^{-8}$ (machine precision) to get `r signif(m.mle.gauss.score, 1)` for MLE and `r signif(m.map.gauss.score, 1)` for MAP.
+
+```{r, echo=F}
+m.mle.gauss.pds <- data.frame(matrix(NA, nrow = num_testing_input, ncol = dim_inputs))
+for (r in 1:dim_inputs) {
+  m.mle.gauss.pds[,r] <-
+    matrix(m.mle.gauss.trends[r+1], nrow = num_testing_input) + 
+    ((2*(matrix(rep(input[,r], num_testing_input), nrow = num_testing_input, byrow = T) - matrix(rep(testing_input[,r], num_obs), nrow = num_testing_input, byrow = F)) / (m.mle.gauss.ranges[r]^2)) *
+       m.mle.gauss.t) %*% 
+    m.mle.gauss.A.inv %*% (as.matrix(output, ncol = n) - H %*% m.mle.gauss.trends)
+  # cat("pd_t:", r, "/", dim_inputs, ",", sep = "")
+}
+m.mle.gauss.pdsnormed.1 <- m.mle.gauss.pds / sqrt(rowSums(m.mle.gauss.pds^2))
+
+m.map.gauss.pds <- data.frame(matrix(NA, nrow = num_testing_input, ncol = dim_inputs))
+for (r in 1:dim_inputs) {
+  m.map.gauss.pds[,r] <-
+    matrix(m.map.gauss.trends[r+1], nrow = num_testing_input) + 
+    ((2*(matrix(rep(input[,r], num_testing_input), nrow = num_testing_input, byrow = T) - matrix(rep(testing_input[,r], num_obs), nrow = num_testing_input, byrow = F)) / (m.map.gauss.ranges[r]^2)) *
+       m.map.gauss.t) %*% 
+    m.map.gauss.A.inv %*% (as.matrix(output, ncol = n) - H %*% m.map.gauss.trends)
+  # cat("pd_t:", r, "/", dim_inputs, ",", sep = "")
+}
+m.map.gauss.pdsnormed.1 <- m.map.gauss.pds / sqrt(rowSums(m.map.gauss.pds^2))
+```
+
+We create an object containing the emulated partial derivatives for use in the alignment measure. Finally, we create an object containing the normalised partial derivatives for use in the alignment measure.
+
+```{r, echo=F}
+
+# actual pds
+
+friedman.5.data.expression <- expression(10 * sin(pi * x1 * x2) + 20 * (x3 - 0.5)^2 + 10 * x4 + 5 * x5)
+# D(friedman.5.data.expression,'x1')
+# D(friedman.5.data.expression,'x2')
+# D(friedman.5.data.expression,'x3')
+# D(friedman.5.data.expression,'x4')
+# D(friedman.5.data.expression,'x5')
+
+friedman.5.data_ddx1 <- function(inputs) {
+  x1 <- inputs[1]
+  x2 <- inputs[2]
+  x3 <- inputs[3]
+  x4 <- inputs[4]
+  x5 <- inputs[5]
+  10 * (cos(pi * x1 * x2) * (pi * x2))
+}
+friedman.5.data_ddx2 <- function(inputs) {
+  x1 <- inputs[1]
+  x2 <- inputs[2]
+  x3 <- inputs[3]
+  x4 <- inputs[4]
+  x5 <- inputs[5]
+  10 * (cos(pi * x1 * x2) * (pi * x1))
+}
+friedman.5.data_ddx3 <- function(inputs) {
+  x1 <- inputs[1]
+  x2 <- inputs[2]
+  x3 <- inputs[3]
+  x4 <- inputs[4]
+  x5 <- inputs[5]
+  20 * (2 * (x3 - 0.5))
+}
+friedman.5.data_ddx4 <- function(inputs) {
+  x1 <- inputs[1]
+  x2 <- inputs[2]
+  x3 <- inputs[3]
+  x4 <- inputs[4]
+  x5 <- inputs[5]
+  10
+}
+friedman.5.data_ddx5 <- function(inputs) {
+  x1 <- inputs[1]
+  x2 <- inputs[2]
+  x3 <- inputs[3]
+  x4 <- inputs[4]
+  x5 <- inputs[5]
+  5
+}
+actual.1 <- data.frame(cbind(rep(NA, num_testing_input), 
+                             rep(NA, num_testing_input),
+                             rep(NA, num_testing_input),
+                             rep(NA, num_testing_input),
+                             rep(NA, num_testing_input))
+                       )
+colnames(actual.1) <- c("mean1","mean2","mean3","mean4","mean5")
+actual.1$mean1 <- matrix(apply(testing_input, 1, friedman.5.data_ddx1), nrow = num_testing_input)
+actual.1$mean2 <- matrix(apply(testing_input, 1, friedman.5.data_ddx2), nrow = num_testing_input)
+actual.1$mean3 <- matrix(apply(testing_input, 1, friedman.5.data_ddx3), nrow = num_testing_input)
+actual.1$mean4 <- matrix(apply(testing_input, 1, friedman.5.data_ddx4), nrow = num_testing_input)
+actual.1$mean5 <- matrix(apply(testing_input, 1, friedman.5.data_ddx5), nrow = num_testing_input)
+
+```
+
+```{r, echo=F}
+rm(list=setdiff(ls(), 
+                c("actual.1", "dim_inputs", "H", "H_testing", "input", "m.mle.gauss.pdsnormed.1", "m.map.gauss.pdsnormed.1", "num_obs", "num_testing_input", "output", "testing_input", "testing_output")))
+
+library(RobustGaSP)
+# library(DiceKriging)
+library(knitr)
+library(readr)
+library(lhs)
+options(scipen=999)
+# source R scripts in
+for (f in setdiff(list.files(), 
+                  union(union(union(union(union(union(union(union(list.files(pattern="*.Rmd"), list.files(pattern="*.pdf")),list.files(pattern="*.db")), list.files(pattern="*_files")), list.files(pattern="*.tex")),list.files(pattern="*.log")),list.files(pattern="*.md")),list.files(pattern="*.html")),list.files(pattern="*archived"))
+                  )
+     ) 
+  {
+  source(f)
+  }
+```
+
+# Function 2: $$y = 10 \sin(-\pi x_1 x_2) - 20(x_3 - 0.5)^2 + 10x_4 - 5x_5$$
+
+We repeat the above steps for the above function. The same training and testing points are used as for the first function.
+
+```{r 2nd-functions-work-0, echo=F}
+
+# My 5D function
+my_5D_function <- function (x) {
+  10*sin(-pi*x[1]*x[2]) - 20*(x[3] - 0.5)^2 + 10*x[4] - 5*x[5]
+}
+```
+
+## Emulator fit and validation
+
+Out-of-sample check results are shown in Table 2 and Figure 4.
+
+```{r 2nd-functions-work-1, include=F, echo=F}
+# output of train points
+output <- matrix(apply(input, 1, my_5D_function), nrow = num_obs)
+
+# emulator build
+m.mle.gauss <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No",
+                     kernel_type = 'pow_exp', alpha = rep(2, ncol(input)),        # squared exponential
+                     method = "mle"                                               # maximum likelihood estimation
+                     )
+m.mle.matern52 <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No",
+                     method = "mle"                                               # maximum likelihood estimation
+                     )
+m.map.gauss <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No",
+                     kernel_type = 'pow_exp', alpha = rep(2, ncol(input)),        # squared exponential
+                     )
+m.map.matern52 <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No"
+                     )
+
+# predictions
+m.mle.gauss.predict <- RobustGaSP::predict(m.mle.gauss, testing_input, testing_trend = H_testing)
+m.mle.matern52.predict <- RobustGaSP::predict(m.mle.matern52, testing_input, testing_trend = H_testing)
+m.map.gauss.predict <- RobustGaSP::predict(m.map.gauss, testing_input, testing_trend = H_testing)
+m.map.matern52.predict <- RobustGaSP::predict(m.map.matern52, testing_input, testing_trend = H_testing)
+
+# output of test points
+testing_output <- matrix(apply(testing_input, 1, my_5D_function), nrow = num_testing_input)
+
+# proportion covered by 95% posterior predictive credible interval
+prop_wn_95CI_mle_gauss <- prop_wn_95CI(
+  m.mle.gauss.predict$lower95, m.mle.gauss.predict$upper95
+  )
+prop_wn_95CI_mle_matern52 <- prop_wn_95CI(
+  m.mle.matern52.predict$lower95, m.mle.matern52.predict$upper95
+  )
+prop_wn_95CI_map_gauss <- prop_wn_95CI(
+  m.map.gauss.predict$lower95, m.map.gauss.predict$upper95
+  )
+prop_wn_95CI_map_matern52 <- prop_wn_95CI(
+  m.map.matern52.predict$lower95, m.map.matern52.predict$upper95
+  )
+
+# out of sample MSE
+MSE_emulator_mle_gauss <- 
+  MSE(m.mle.gauss.predict$mean, testing_output)
+MSE_emulator_mle_matern52 <- 
+  MSE(m.mle.matern52.predict$mean, testing_output)
+MSE_emulator_map_gauss <- 
+  MSE(m.map.gauss.predict$mean, testing_output)
+MSE_emulator_map_matern52 <- 
+  MSE(m.map.matern52.predict$mean, testing_output)
+
+# average length of posterior predictive credible interval
+length_95CI_map_gauss <- 
+  length_95CI(m.map.gauss.predict$lower95, m.map.gauss.predict$upper95)
+length_95CI_map_matern52 <- 
+  length_95CI(m.map.matern52.predict$lower95, m.map.matern52.predict$upper95)
+length_95CI_mle_gauss <- 
+  length_95CI(m.mle.gauss.predict$lower95, m.mle.gauss.predict$upper95)
+length_95CI_mle_matern52 <- 
+  length_95CI(m.mle.matern52.predict$lower95, m.mle.matern52.predict$upper95)
+
+```
+
+```{r checks-summary-2, echo=F}
+checks_per_estimation <- data.frame(
+  cbind(
+    c(rep("Maximum likelihood",2), rep("MAP",2)),
+    rep(c("Gauss", "Matern 5/2"), 2),
+    round(c(prop_wn_95CI_mle_gauss, prop_wn_95CI_mle_matern52, prop_wn_95CI_map_gauss, prop_wn_95CI_map_matern52),2),
+    signif(c(MSE_emulator_mle_gauss, MSE_emulator_mle_matern52, MSE_emulator_map_gauss, MSE_emulator_map_matern52),1),
+    round(c(length_95CI_mle_gauss, length_95CI_mle_matern52, length_95CI_map_gauss, length_95CI_map_matern52),4)
+    )
+  )
+colnames(checks_per_estimation) <- c("Estimate method", "Kernel", "Prop. w/n 95% CI", "Out-of-sample MSE", "Mean width of 95% CI")
+kable(checks_per_estimation, 
+      align=c("l","l","c","c","c"),
+      caption = "Out-of-sample checks"
+      )
+```
+
+```{r, fig.show="hold", out.width="50%", fig.cap="Emulator versus model for the new points. Left: Using a Gauss kernel. Right: Using a Matern 5/2 kernel. Red: MLE. Blue: MAP", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+plot(testing_output, m.mle.gauss.predict$mean,
+     col="red", pch=19, cex=0.5,
+     xlab = "Model", ylab = "Emulator")
+points(testing_output, m.map.gauss.predict$mean,
+       col="blue", pch=19, cex=0.5)
+abline(0,1)
+
+plot(testing_output, m.mle.matern52.predict$mean,
+     col="red", pch=19, cex=0.5,
+     xlab = "Model", ylab = "Emulator")
+points(testing_output, m.map.matern52.predict$mean,
+     col="blue", pch=19, cex=0.5)
+abline(0,1)
+```
+
+LOO CV results are shown in Figure 5, but only for the Gauss kernel as some of the LOO predictions for the Matern 5/2 kernel (in both estimation methods), extremely large positive or negative values were returned (along with `NaN` for the corresponding lower or upper bound of the 95% CI).
+
+```{r 2nd-functions-work-2, include=F, echo=F}
+# LOO CV
+m_mle_loo(input, output, "gauss")
+m_mle_loo(input, output, "matern52")
+m_map_loo(input, output, "gauss")
+m_map_loo(input, output, "matern52")
+```
+
+```{r, validation-plots-2, fig.show="hold", out.width="50%", fig.cap="LOO CV. Top: Maximum likelihood estimation for the Gauss (left) and Matern 5/2 (right) kernels. Bottom: Marginal posterior mode estimation for the Gauss (left) and Matern 5/2 (right) kernels.", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+# MLE plots
+loo_validation_plot(m.mle.gauss.loo)
+
+loo_validation_plot(m.mle.matern52.loo)
+
+# MAP plots
+loo_validation_plot(m.map.gauss.loo)
+
+loo_validation_plot(m.map.matern52.loo)
+
+```
+
+```{r 2nd-functions-work-3, include=F, echo=F}
+# parameter estimates
+m_ests(m.mle.gauss, "mle", "gauss")
+m_ests(m.map.gauss, "map", "gauss")
+```
+
+\newpage
+
+## Verifying the estimates by-hand for both estimation methods
+
+A good match is found for the predictions (Figure 6).
+
+```{r 2nd-functions-work-4, include=F, echo=F}
+# make A and A_inv
+m.mle.gauss.A <- A_maker(input, m.mle.gauss.ranges)
+m.mle.gauss.A.inv <- solve(m.mle.gauss.A)
+m.map.gauss.A <- A_maker(input, m.map.gauss.ranges)
+m.map.gauss.A.inv <- solve(m.map.gauss.A)
+
+# make t
+m.mle.gauss.t <- t_maker(input, testing_input, m.mle.gauss.ranges)
+m.map.gauss.t <- t_maker(input, testing_input, m.map.gauss.ranges)
+```
+
+```{r, fig.show="hold", out.width="50%", fig.cap="The predictions found by-hand match well with those made by both estimation methods (left), with the latter minus the former found to be essentially zero (right). Top: MLE. Bottom: MAP.", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+# MLE plots
+m.mle.gauss.predictbyhand <- byhand_preds(testing_input,
+                                   m.mle.gauss.trends,
+                                   m.mle.gauss.t,
+                                   m.mle.gauss.A.inv,
+                                   output,
+                                   H)
+
+m_pred_plots_2D(input, output, testing_input, m.mle.gauss.predict, m.mle.gauss.predictbyhand)
+
+# MAP plots
+m.map.gauss.predictbyhand <- byhand_preds(testing_input,
+                                   m.map.gauss.trends,
+                                   m.map.gauss.t,
+                                   m.map.gauss.A.inv,
+                                   output,
+                                   H)
+
+m_pred_plots_2D(input, output, testing_input, m.map.gauss.predict, m.map.gauss.predictbyhand)
+
+```
+
+```{r 2nd-functions-work-5, include=F, echo=F}
+# predictions by hand comparison score
+m.mle.gauss.score <- sum(abs(m.mle.gauss.predict$mean - as.vector(m.mle.gauss.predictbyhand))) / (10^(-8)*num_testing_input)
+m.map.gauss.score <- sum(abs(m.map.gauss.predict$mean - as.vector(m.map.gauss.predictbyhand))) / (10^(-8)*num_testing_input)
+
+m.mle.gauss.pds <- data.frame(matrix(NA, nrow = num_testing_input, ncol = dim_inputs))
+for (r in 1:dim_inputs) {
+  m.mle.gauss.pds[,r] <-
+    matrix(m.mle.gauss.trends[r+1], nrow = num_testing_input) + 
+    ((2*(matrix(rep(input[,r], num_testing_input), nrow = num_testing_input, byrow = T) - matrix(rep(testing_input[,r], num_obs), nrow = num_testing_input, byrow = F)) / (m.mle.gauss.ranges[r]^2)) *
+       m.mle.gauss.t) %*% 
+    m.mle.gauss.A.inv %*% (as.matrix(output, ncol = n) - H %*% m.mle.gauss.trends)
+  # cat("pd_t:", r, "/", dim_inputs, ",", sep = "")
+}
+m.mle.gauss.pdsnormed.2 <- m.mle.gauss.pds / sqrt(rowSums(m.mle.gauss.pds^2))
+
+m.map.gauss.pds <- data.frame(matrix(NA, nrow = num_testing_input, ncol = dim_inputs))
+for (r in 1:dim_inputs) {
+  m.map.gauss.pds[,r] <-
+    matrix(m.map.gauss.trends[r+1], nrow = num_testing_input) + 
+    ((2*(matrix(rep(input[,r], num_testing_input), nrow = num_testing_input, byrow = T) - matrix(rep(testing_input[,r], num_obs), nrow = num_testing_input, byrow = F)) / (m.map.gauss.ranges[r]^2)) *
+       m.map.gauss.t) %*% 
+    m.map.gauss.A.inv %*% (as.matrix(output, ncol = n) - H %*% m.map.gauss.trends)
+  # cat("pd_t:", r, "/", dim_inputs, ",", sep = "")
+}
+m.map.gauss.pdsnormed.2 <- m.map.gauss.pds / sqrt(rowSums(m.map.gauss.pds^2))
+```
+
+For both we calculate $$\dfrac{\sum\limits_{i=1}^{N}\Biggl|\text{(predictions from package)}_{i} - \text{(predictions by-hand)}_{i}\Biggr|}{N},$$ where $N$ is the number of test points, then divide this by $10^{-8}$ (machine precision) to get `r signif(m.mle.gauss.score, 1)` for MLE and `r signif(m.map.gauss.score, 1)` for MAP.
+
+```{r, echo=F}
+
+# actual pds
+
+my.5D.function.expression <- expression(10*sin(-pi*x1*x2) - 20*(x3 - 0.5)^2 + 10*x4 - 5*x5)
+# D(my.5D.function.expression,'x1')
+# D(my.5D.function.expression,'x2')
+# D(my.5D.function.expression,'x3')
+# D(my.5D.function.expression,'x4')
+# D(my.5D.function.expression,'x5')
+
+my.5D.function_ddx1 <- function(inputs) {
+  x1 <- inputs[1]
+  x2 <- inputs[2]
+  x3 <- inputs[3]
+  x4 <- inputs[4]
+  x5 <- inputs[5]
+  -(10 * (cos(-pi * x1 * x2) * (pi * x2)))
+}
+my.5D.function_ddx2 <- function(inputs) {
+  x1 <- inputs[1]
+  x2 <- inputs[2]
+  x3 <- inputs[3]
+  x4 <- inputs[4]
+  x5 <- inputs[5]
+  10 * (cos(-pi * x1 * x2) * (-pi * x1))
+}
+my.5D.function_ddx3 <- function(inputs) {
+  x1 <- inputs[1]
+  x2 <- inputs[2]
+  x3 <- inputs[3]
+  x4 <- inputs[4]
+  x5 <- inputs[5]
+  -(20 * (2 * (x3 - 0.5)))
+}
+my.5D.function_ddx4 <- function(inputs) {
+  x1 <- inputs[1]
+  x2 <- inputs[2]
+  x3 <- inputs[3]
+  x4 <- inputs[4]
+  x5 <- inputs[5]
+  10
+}
+my.5D.function_ddx5 <- function(inputs) {
+  x1 <- inputs[1]
+  x2 <- inputs[2]
+  x3 <- inputs[3]
+  x4 <- inputs[4]
+  x5 <- inputs[5]
+  -5
+}
+actual.2 <- data.frame(cbind(rep(NA, num_testing_input), 
+                             rep(NA, num_testing_input),
+                             rep(NA, num_testing_input),
+                             rep(NA, num_testing_input),
+                             rep(NA, num_testing_input))
+                       )
+colnames(actual.2) <- c("mean1","mean2","mean3","mean4","mean5")
+actual.2$mean1 <- matrix(apply(testing_input, 1, my.5D.function_ddx1), nrow = num_testing_input)
+actual.2$mean2 <- matrix(apply(testing_input, 1, my.5D.function_ddx2), nrow = num_testing_input)
+actual.2$mean3 <- matrix(apply(testing_input, 1, my.5D.function_ddx3), nrow = num_testing_input)
+actual.2$mean4 <- matrix(apply(testing_input, 1, my.5D.function_ddx4), nrow = num_testing_input)
+actual.2$mean5 <- matrix(apply(testing_input, 1, my.5D.function_ddx5), nrow = num_testing_input)
+
+```
+
+# Alignment measure
+
+```{r, echo=F}
+
+actual.normed.1 <- actual.1 / sqrt(rowSums(actual.1^2))
+actual.normed.2 <- actual.2 / sqrt(rowSums(actual.2^2))
+
+AM.actual.1.2 <- mean(abs(rowSums(actual.normed.1 * actual.normed.2)))
+```
+
+```{r, echo=F}
+AM.mle.1.2 <- mean(abs(rowSums(m.mle.gauss.pdsnormed.1 * m.map.gauss.pdsnormed.2)))
+AM.map.1.2 <- mean(abs(rowSums(m.map.gauss.pdsnormed.1 * m.map.gauss.pdsnormed.2)))
+```
+
+We calculate the alignment measure of this function with a couple of others. Using the **actual** partial derivatives of the two functions at the 100 testing points, we find an AM of 0.5638
+<!-- 0.5638185  -->
+(and 0.5591 using 1000). 
+<!-- 0.5591083  -->
+Using MLE at these 100 points we get an alignment for these two functions of 0.5662 (and 0.5574 using 1000)
+<!-- 0.5661998 -->
+<!-- 0.5574105 -->
+and for MAP 0.5663 (and 0.5575 using 1000).
+<!-- 0.5663419 -->
+<!-- 0.5575974 -->

@@ -1,0 +1,455 @@
+---
+title: "DiceKriging vs RobustGaSP"
+date: "Gu (2019)"
+output: pdf_document
+fontsize: 10pt
+header-includes:
+  - \usepackage{xcolor}
+  - \definecolor{mybgcolor}{HTML}{ebfff0}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RobustGaSP)
+library(DiceKriging)
+library(knitr)
+library(readr)
+library(lhs)
+options(scipen=999)
+# source R scripts in
+for (f in setdiff(list.files(), 
+                  union(union(union(union(union(union(union(list.files(pattern="*.Rmd"), list.files(pattern="*.pdf")),list.files(pattern="*.db")), list.files(pattern="*_files")), list.files(pattern="*.tex")),list.files(pattern="*.log")),list.files(pattern="*.md")),list.files(pattern="*.html"))
+                  )
+     ) 
+  {
+  source(f)
+  }
+```
+
+<!-- \pagecolor{mybgcolor} -->
+
+# Examples
+
+## The modified sine wave function
+
+It is expected that, for a one-dimensional function, both packages will perform well with an adequate number of design points, so we start with the function called the modified sine wave discussed in Gu (2016). It has the form $$y = 3\sin(5\pi x) + \cos(7\pi x),$$
+where $x = [0, 10]$. We first perform emulation based on 12 equally spaced design points on [0,1].
+
+```{r, fig.height=3, fig.width=4}
+sinewave <- function(x) {
+  3*sin(5*pi*x)*x + cos(7*pi*x)
+  }
+input <- as.matrix(seq(0, 1, 1/11))
+output <- sinewave(input)
+plot(output ~ input)
+```
+
+The GaSP model is attempted to be fitted by both the `RobustGaSP` and `DiceKriging` packages, \textcolor{teal}{but this time with a Gauss kernel}, with the constant mean function. However, in the case of `DiceKriging`, an error is thrown (`Error in chol.default(R) : the leading minor of order 8 is not positive`) and so, to replicate the MLE approach of `DiceKriging`, `RobustGaSP` is used to fit the emulate (and then `DiceKriging` to make the predictions from the emulator object produced), setting the `method` argument equal to `"mle"`. Whenever this is done, instead of using `DiceKriging` directly, it will be noted.
+
+```{r}
+m <- rgasp(design=input, response=output,
+           kernel_type = 'pow_exp', 
+           alpha = rep(2, ncol(input)),
+           )
+m
+```
+
+```{r}
+dk <- rgasp(design=input, response=output,
+           kernel_type = 'pow_exp', 
+           alpha = rep(2, ncol(input)),
+           method = "mle"
+           )
+dk
+```
+
+The estimated range parameter is still found to be around `r round(1 / m@beta_hat,2)` in the `RobustGaSP` package, but now `r round(1 / dk@beta_hat,2)` when using MLE. To see which estimate is better, we perform prediction on 100 test points, equally spaced in [0,1].
+
+```{r}
+testing_input <- as.matrix(seq(0, 1, 1/99))
+m.predict <- RobustGaSP::predict(m, testing_input)
+dk.predict <- DiceKriging::predict(dk, testing_input, type='UK', checkNames = F)
+```
+
+The emulation results are plotted in Figure 6. Note that the red curve from the `DiceKriging` package still degenerates to the fitted mean with spikes at the design points. This unsatisfying phenomenon, discussed in Gu et al. (2018), happens when the estimated covariance matrix is close to an identity matrix, i.e., $\hat{\textbf{R}} \approx \textbf{I}_n$, or equivalently $\hat{\gamma}$ tends to 0. Repeated runs of the `DiceKriging` package under different initializations yielded essentially the same results.
+
+\textcolor{teal}{Changing from 5 to 12 and then to 32 observations has the following effects on the estimates. `RobustGaSP` had to be used in place of `DiceKriging` in the case of 12 observations (as above) and 32 observations. Note that between 25 and 30 observations, `RobustGaSP` starts to produce odd results, as seen below.}
+
+```{r, include=F}
+input.5 <- as.matrix(seq(0, 1, 1/4))
+output.5 <- sinewave(input.5)
+m.5 <- rgasp(design=input.5, response=output.5,
+           kernel_type = 'pow_exp', 
+           alpha = rep(2, ncol(input)),
+           )
+dk.5 <- km(design = input.5, response = output.5,
+           covtype="gauss"
+           )
+testing_input <- as.matrix(seq(0, 1, 1/99))
+m.predict.5 <- RobustGaSP::predict(m.5, testing_input)
+dk.predict.5 <- DiceKriging::predict(dk.5, testing_input, type='UK', checkNames = F)
+testing_output <- sinewave(testing_input)
+
+input.12 <- as.matrix(seq(0, 1, 1/11))
+output.12 <- sinewave(input.12)
+m.12 <- rgasp(design=input.12, response=output.12,
+           kernel_type = 'pow_exp', 
+           alpha = rep(2, ncol(input)),
+           )
+dk.12 <- rgasp(design=input.12, response=output.12,
+           kernel_type = 'pow_exp', 
+           alpha = rep(2, ncol(input.12)),
+           method = "mle"
+           )
+testing_input <- as.matrix(seq(0, 1, 1/99))
+m.predict.12 <- RobustGaSP::predict(m.12, testing_input)
+dk.predict.12 <- DiceKriging::predict(dk.12, testing_input, type='UK', checkNames = F)
+testing_output <- sinewave(testing_input)
+
+input.32 <- as.matrix(seq(0, 1, 1/31))
+output.32 <- sinewave(input.32)
+m.32 <- rgasp(design=input.32, response=output.32,
+           kernel_type = 'pow_exp', 
+           alpha = rep(2, ncol(input)),
+           )
+dk.32 <- rgasp(design=input.32, response=output.32,
+           kernel_type = 'pow_exp', 
+           alpha = rep(2, ncol(input.32)),
+           method = "mle"
+           )
+testing_input <- as.matrix(seq(0, 1, 1/99))
+m.predict.32 <- RobustGaSP::predict(m.32, testing_input)
+dk.predict.32 <- DiceKriging::predict(dk.32, testing_input, type='UK', checkNames = F)
+testing_output <- sinewave(testing_input)
+```
+
+```{r loo-rgasp, include=F}
+loo_rg.5 <- data.frame(matrix(NA, nrow = nrow(input.5), ncol = 5))
+colnames(loo_rg.5) <- c("actual", "loo_prediction", "lower95", "upper95", "validated")
+loo_rg.5$actual <- output.5
+for (i in 1:nrow(input.5)) {
+  rgasp_object <- rgasp(design=input.5[-i,,drop = F], 
+                     response=output.5[-i,,drop = F],
+                     kernel_type = 'pow_exp', 
+                     alpha = rep(2, ncol(input.5))
+                     )
+  predict_object <- RobustGaSP::predict(rgasp_object, input.5[i,,drop = F])
+  loo_rg.5$loo_prediction[i] <- predict_object$mean
+  loo_rg.5$lower95[i] <- predict_object$lower95
+  loo_rg.5$upper95[i] <- predict_object$upper95
+  loo_rg.5$validated[i] <- 
+        loo_rg.5$actual[i] >= loo_rg.5$lower95[i] &
+        loo_rg.5$actual[i] <= loo_rg.5$upper95[i]
+}
+
+loo_rg.12 <- data.frame(matrix(NA, nrow = nrow(input.12), ncol = 5))
+colnames(loo_rg.12) <- c("actual", "loo_prediction", "lower95", "upper95", "validated")
+loo_rg.12$actual <- output.12
+for (i in 1:nrow(input.12)) {
+  rgasp_object <- rgasp(design=input.12[-i,,drop = F], 
+                     response=output.12[-i,,drop = F],
+                     kernel_type = 'pow_exp', 
+                     alpha = rep(2, ncol(input.12))
+                     )
+  predict_object <- RobustGaSP::predict(rgasp_object, input.12[i,,drop = F], type='UK', checkNames = F)
+  loo_rg.12$loo_prediction[i] <- predict_object$mean
+  loo_rg.12$lower95[i] <- predict_object$lower95
+  loo_rg.12$upper95[i] <- predict_object$upper95
+  loo_rg.12$validated[i] <- 
+        loo_rg.12$actual[i] >= loo_rg.12$lower95[i] &
+        loo_rg.12$actual[i] <= loo_rg.12$upper95[i]
+}
+
+loo_rg.32 <- data.frame(matrix(NA, nrow = nrow(input.32), ncol = 5))
+colnames(loo_rg.32) <- c("actual", "loo_prediction", "lower95", "upper95", "validated")
+loo_rg.32$actual <- output.32
+for (i in 1:nrow(input.32)) {
+  rgasp_object <- rgasp(design=input.12[-i,,drop = F], 
+                     response=output.12[-i,,drop = F],
+                     kernel_type = 'pow_exp', 
+                     alpha = rep(2, ncol(input.12))
+                     )
+  predict_object <- RobustGaSP::predict(rgasp_object, input.32[i,,drop = F], type='UK', checkNames = F)
+  loo_rg.32$loo_prediction[i] <- predict_object$mean
+  loo_rg.32$lower95[i] <- predict_object$lower95
+  loo_rg.32$upper95[i] <- predict_object$upper95
+  loo_rg.32$validated[i] <- 
+        loo_rg.32$actual[i] >= loo_rg.32$lower95[i] &
+        loo_rg.32$actual[i] <= loo_rg.32$upper95[i]
+}
+```
+
+```{r loo-mle, include=F}
+loo_dk.5 <- data.frame(matrix(NA, nrow = nrow(input.5), ncol = 5))
+colnames(loo_dk.5) <- c("actual", "loo_prediction", "lower95", "upper95", "validated")
+loo_dk.5$actual <- output.5
+for (i in 1:nrow(input.5)) {
+  km_object <- km(design = input.5[-i,,drop = F], 
+                  response = output.5[-i,,drop = F], 
+                  covtype="gauss"
+                  )
+  predict_object <- DiceKriging::predict(km_object, input.5[i,,drop = F], type='UK', checkNames = F)
+  loo_dk.5$loo_prediction[i] <- predict_object$mean
+  loo_dk.5$lower95[i] <- predict_object$lower95
+  loo_dk.5$upper95[i] <- predict_object$upper95
+  loo_dk.5$validated[i] <- 
+        loo_dk.5$actual[i] >= loo_dk.5$lower95[i] &
+        loo_dk.5$actual[i] <= loo_dk.5$upper95[i]
+}
+
+loo_dk.12 <- data.frame(matrix(NA, nrow = nrow(input.12), ncol = 5))
+colnames(loo_dk.12) <- c("actual", "loo_prediction", "lower95", "upper95", "validated")
+loo_dk.12$actual <- output.12
+for (i in 1:nrow(input.12)) {
+  km_object <- rgasp(design=input.12[-i,,drop = F], 
+                     response=output.12[-i,,drop = F],
+                     kernel_type = 'pow_exp', 
+                     alpha = rep(2, ncol(input.12)),
+                     method = "mle"
+                     )
+  predict_object <- DiceKriging::predict(km_object, input.12[i,,drop = F], type='UK', checkNames = F)
+  loo_dk.12$loo_prediction[i] <- predict_object$mean
+  loo_dk.12$lower95[i] <- predict_object$lower95
+  loo_dk.12$upper95[i] <- predict_object$upper95
+  loo_dk.12$validated[i] <- 
+        loo_dk.12$actual[i] >= loo_dk.12$lower95[i] &
+        loo_dk.12$actual[i] <= loo_dk.12$upper95[i]
+}
+
+loo_dk.32 <- data.frame(matrix(NA, nrow = nrow(input.32), ncol = 5))
+colnames(loo_dk.32) <- c("actual", "loo_prediction", "lower95", "upper95", "validated")
+loo_dk.32$actual <- output.32
+for (i in 1:nrow(input.32)) {
+  km_object <- rgasp(design=input.12[-i,,drop = F], 
+                     response=output.12[-i,,drop = F],
+                     kernel_type = 'pow_exp', 
+                     alpha = rep(2, ncol(input.12)),
+                     method = "mle"
+                     )
+  predict_object <- DiceKriging::predict(km_object, input.32[i,,drop = F], type='UK', checkNames = F)
+  loo_dk.32$loo_prediction[i] <- predict_object$mean
+  loo_dk.32$lower95[i] <- predict_object$lower95
+  loo_dk.32$upper95[i] <- predict_object$upper95
+  loo_dk.32$validated[i] <- 
+        loo_dk.32$actual[i] >= loo_dk.32$lower95[i] &
+        loo_dk.32$actual[i] <= loo_dk.32$upper95[i]
+}
+```
+
+\newpage
+
+```{r, fig.show="hold", out.width="50%", fig.height=2.90, echo=F}
+par(mar = c(4, 4, .1, .1))
+
+plot(testing_input, m.predict.5$mean,type='l', col='blue',
+     xlab='input', ylab='output',
+     ylim = c(-5,5))
+polygon( c(testing_input,rev(testing_input)), c(m.predict.5$lower95,
+                                                rev(m.predict.5$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,m.predict.5$mean, type='l', col='blue')
+lines(testing_input,dk.predict.5$mean, type='l', col='red')
+lines(input.5, output.5, type='p', pch=19, cex=0.5)
+
+loo_validation_plot(loo_dk.5)
+
+loo_validation_plot(loo_rg.5)
+```
+
+
+```{r, fig.show="hold", out.width="50%", fig.height=2.90, echo=F}
+par(mar = c(4, 4, .1, .1))
+
+plot(testing_input, m.predict.12$mean,type='l', col='blue',
+     xlab='input', ylab='output',
+     ylim = c(-5,5))
+polygon( c(testing_input,rev(testing_input)), c(m.predict.12$lower95,
+                                                rev(m.predict.12$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,m.predict.12$mean, type='l', col='blue')
+lines(testing_input,dk.predict.12$mean, type='l', col='red')
+lines(input.12, output.12, type='p', pch=19, cex=0.5)
+
+loo_validation_plot(loo_dk.12)
+
+loo_validation_plot(loo_rg.12)
+```
+
+```{r, fig.show="hold", out.width="50%", fig.height=2.90, echo=F}
+par(mar = c(4, 4, .1, .1))
+
+plot(testing_input, m.predict.32$mean,type='l', col='blue',
+     xlab='input', ylab='output',
+     ylim = c(-5,5))
+polygon( c(testing_input,rev(testing_input)), c(m.predict.32$lower95,
+                                                rev(m.predict.32$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,m.predict.32$mean, type='l', col='blue')
+lines(testing_input,dk.predict.32$mean, type='l', col='red')
+lines(input.32, output.32, type='p', pch=19, cex=0.5)
+
+loo_validation_plot(loo_dk.32)
+
+loo_validation_plot(loo_rg.32)
+```
+
+```{r, echo=F}
+RG_vs_DK_estimates.5 <- data.frame(
+  cbind(
+    c("DiceKriging", "RobustGaSP"),
+    c("Gauss", "Gauss"),
+    round(c(dk.5@trend.coef, m.5@theta_hat),2),
+    round(c(dk.5@covariance@range.val, 1/m.5@beta_hat),2),
+    round(c(dk.5@covariance@sd2, m.5@sigma2_hat),2)
+    )
+  )
+colnames(RG_vs_DK_estimates.5) <- c("Package", "Kernel", "Trend", "Range", "Variance")
+kable(RG_vs_DK_estimates.5, 
+      align=c("l","l","c","c","c"),
+      caption = "Estimates table with 5 observations"
+      )
+```
+
+```{r, echo=F}
+RG_vs_DK_estimates.12 <- data.frame(
+  cbind(
+    c("DiceKriging", "RobustGaSP"),
+    c("Gauss", "Gauss"),
+    round(c(dk.12@theta_hat, m.12@theta_hat),2),
+    round(c(1/dk.12@beta_hat, 1/m.12@beta_hat),2),
+    round(c(dk.12@sigma2_hat, m.12@sigma2_hat),2)
+    )
+  )
+colnames(RG_vs_DK_estimates.12) <- c("Package", "Kernel", "Trend", "Range", "Variance")
+kable(RG_vs_DK_estimates.12, 
+      align=c("l","l","c","c","c"),
+      caption = "Estimates table with 12 observations"
+      )
+```
+
+```{r, echo=F}
+RG_vs_DK_estimates.32 <- data.frame(
+  cbind(
+    c("DiceKriging", "RobustGaSP"),
+    c("Gauss", "Gauss"),
+    round(c(dk.32@theta_hat, m.32@theta_hat),2),
+    round(c(1/dk.32@beta_hat, 1/m.32@beta_hat),2),
+    round(c(dk.32@sigma2_hat, m.32@sigma2_hat),2)
+    )
+  )
+colnames(RG_vs_DK_estimates.32) <- c("Package", "Kernel", "Trend", "Range", "Variance")
+kable(RG_vs_DK_estimates.32, 
+      align=c("l","l","c","c","c"),
+      caption = "Estimates table with 32 observations"
+      )
+```
+
+## Verifying the estimates by-hand for both packages
+
+To calculate the posterior predictions at the `r nrow(testing_input)` testing points by-hand, we require the matrix $H$ containing the inputs for the observations and well as matrix $A$, its inverse, and $\textbf{t}(x^{*})$ for all `r nrow(testing_input)` of the new inputs $x^{*}$. $A$ and $\textbf{t}(x^{*})$ are built using the estimate of the range parameter returned by each package. By-hand predictions match those returned by `DiceKriging` (Figure 2) and `RobustGaSP` (Figure 3).
+
+```{r, echo=F}
+gpests_rgasp(m, "gauss")
+
+cov_type <- "gauss"
+
+assign(paste0("gp_dk_", cov_type, "_range_pars"), 
+                (1 / dk@beta_hat))
+assign(paste0("gp_dk_", cov_type, "_sd_par"), 
+       dk@sigma2_hat)
+assign(paste0("gp_dk_", cov_type, "_trend_pars"), 
+       dk@theta_hat)
+```
+
+```{r, echo=F}
+# H
+# H <- H_maker(input)
+H <- cbind(c(rep(1, nrow(input))))
+
+# make A and A_inv
+
+# using DiceKriging's range estimate(s)
+A_DK <- A_maker_km_gauss(input, gp_dk_gauss_range_pars)
+A_inv_DK <- solve(A_DK)
+
+# using RobustGaSP's range estimate(s)
+A_RG <- A_maker_rgasp_gauss(input, gp_rg_gauss_range_pars)
+A_inv_RG <- solve(A_RG)
+
+# make t
+
+# using DiceKriging's range estimate(s)
+t_DK <- t_maker_km_gauss(input, testing_input, gp_dk_gauss_range_pars)
+
+# using RobustGaSP's range estimate(s)
+t_RG <- t_maker_rgasp_gauss(input, testing_input, gp_rg_gauss_range_pars)
+```
+
+```{r, figures-side, fig.show="hold", out.width="50%", fig.cap="The predictions found by-hand match well with those made by both packages (left), with the latter minus the former found to be essentially zero (right). Top: DiceKriging. Bottom: RobustGaSP.", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+# DiceKriging's plots
+byhand_preds_DK <- matrix(
+  c(rep(1, nrow(testing_input))), 
+  nrow = nrow(testing_input), byrow = F
+  ) %*% gp_dk_gauss_range_pars +
+  t_DK %*% 
+  A_inv_DK %*% 
+  (as.matrix(output, ncol = nrow(output)) - H %*% gp_dk_gauss_range_pars)
+
+plot(NULL,
+     xlim = c(start_point-amount,start_point+1+amount),
+     ylim = c(min(dk.predict.12$mean),max(dk.predict.12$mean)),
+     xlab="input",
+     ylab="output"
+)
+legend("topleft",
+       c("DiceKriging","by-hand","observations"),
+       fill=c("black","red","blue")
+)
+#
+points(dk.predict.12$mean ~ testing_input, pch=20, cex=0.75)
+
+points(byhand_preds_DK ~ testing_input, pch=4, cex=0.25, col = "red")
+
+points(output ~ input, pch=19, col="blue", cex=1.2)
+
+# RobustGaSP's plots
+byhand_preds_RG <- matrix(
+  c(rep(1, nrow(testing_input))), 
+  nrow = nrow(testing_input), byrow = F
+  ) %*% gp_rg_gauss_range_pars +
+  t_DK %*% 
+  A_inv_DK %*% 
+  (as.matrix(output, ncol = nrow(output)) - H %*% gp_rg_gauss_range_pars)
+
+plot(NULL,
+     xlim = c(start_point-amount,start_point+1+amount),
+     ylim = c(min(m.predict.12$mean),max(m.predict.12$mean)),
+     xlab="input",
+     ylab="output"
+)
+legend("topleft",
+       c("RobustGaSP","by-hand","observations"),
+       fill=c("black","red","blue")
+)
+#
+points(m.predict.12$mean ~ testing_input, pch=20, cex=0.75)
+
+points(byhand_preds_RG ~ testing_input, pch=4, cex=0.25, col = "red")
+
+points(output ~ input, pch=19, col="blue", cex=1.2)
+
+
+```
+
+```{r, echo = F}
+byhand_scored_DK <- sum(abs(DK_gauss.predict$mean - as.vector(byhand_preds_DK))) / (10^(-8)*num_testing_input)
+
+byhand_scored_RG <- sum(abs(RG_gauss.predict@mean - as.vector(byhand_preds_RG))) / (10^(-8)*num_testing_input)
+```
+
+For both we calculate $$\dfrac{\sum\limits_{i=1}^{1000}\Biggl|\text{(predictions from package)}_{i} - \text{(predictions by-hand)}_{i}\Biggr|}{1000}$$ then divide this by $10^{-8}$ (machine precision) to get `r signif(byhand_scored_DK, 1)` for `DiceKriging` and  `r signif(byhand_scored_RG, 1)` for `RobustGaSP` (the latter approximately a factor of `r round(byhand_scored_RG / byhand_scored_DK)` larger than the former).
+
+\textcolor{teal}{Why don't RobustGaSP's estimates change? What is the stochastic element of DiceKriging?}

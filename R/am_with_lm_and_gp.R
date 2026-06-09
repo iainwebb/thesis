@@ -60,24 +60,24 @@ threshold <- 0.60
 # R2_adj_A_O_D_matrix <- matrix(NA, nrow = 192, ncol = 144)
 # lm_all_d_dxi_normalised_A_O_D_array <- array(NA, dim = c(length(longitude), length(latitude), p))
 # lm_best_d_dxi_normalised_A_O_D_array <- array(NA, dim = c(length(longitude), length(latitude), p))
-# 
+#
 # for (long in 1:192) {
 #   for (lat in 1:144) {
 #     df <- data.frame(
 #       cbind("A_O_D" = response_A_O_D_array[long, lat, ], inputs_x_norm_T_matrix)
 #       )
 #     lin_mod <- lm(A_O_D ~., df)
-#     R2_adj_A_O_D_matrix[long, lat] <-
-#       summary(lin_mod)$adj.r.squared
-#     lm_all_d_dxi_normalised_A_O_D_array[long, lat,] <-
-#       as.vector(summary(lin_mod)$coefficients[2:38, 1]) / sqrt(sum((as.vector(summary(lin_mod)$coefficients[2:38, 1]))^2))
+#     R2_adj <- summary(lin_mod)$adj.r.squared
+#     R2_adj_A_O_D_matrix[long, lat] <- R2_adj
+#     lm_pd_ests <- as.vector(summary(lin_mod)$coefficients[2:38, 1])  
+#     lm_all_d_dxi_normalised_A_O_D_array[long, lat,] <- lm_pd_ests / sqrt(sum(lm_pd_ests^2))
 #     lm_best_d_dxi_normalised_A_O_D_array[long, lat,] <-
-#       if (summary(lin_mod)$adj.r.squared >= threshold) lm_all_d_dxi_normalised_A_O_D_array[long, lat,] 
+#       if (R2_adj >= threshold) lm_all_d_dxi_normalised_A_O_D_array[long, lat,]
 #       else rep(NA, p)
 #   }
 #   cat(long, "/192 ", sep = "")
 # }
-# rm("long", "lat", "df", "lin_mod")
+# rm("long", "lat", "df", "lin_mod", "R2_adj")
 
 # export
 # write_lines(as.vector(R2_adj_A_O_D_matrix),
@@ -144,23 +144,23 @@ map("world",lwd=1.2,add=TRUE, lty=1)
 #       cbind("E_R_F" = response_E_R_F_dataframe, inputs_x_norm_T_matrix)
 #     )
 #     lin_mod <- lm(E_R_F ~., df)
-#     R2_adj_E_R_F_matrix[long, lat] <- summary(lin_mod)$adj.r.squared
+#     R2_adj <- summary(lin_mod)$adj.r.squared
+#     R2_adj_E_R_F_matrix[long, lat] <- R2_adj
+#     lm_pd_ests <- as.vector(summary(lin_mod)$coefficients[2:38, 1])
 #     lm_d_dxi_normalised_E_R_F_array[long, lat,] <-
-#       if (summary(lin_mod)$adj.r.squared >= threshold) as.vector(summary(lin_mod)$coefficients[2:38, 1]) / sqrt(sum((as.vector(summary(lin_mod)$coefficients[2:38, 1]))^2)) else NA
+#       if (R2_adj >= threshold) lm_pd_ests / sqrt(sum(lm_pd_ests^2)) else NA
 #   }
 #   cat(long, "/192 ", sep = "")
 # }
-# rm("long", "lat", "df", "lin_mod")
+# rm("long", "lat", "df", "lin_mod", "R2_adj")
 # write_lines(as.vector(R2_adj_E_R_F_matrix),
 #             file="objects/R2_adj_E_R_F_matrix.txt")
 # write_lines(as.vector(lm_d_dxi_normalised_E_R_F_array),
 #             file="objects/lm_d_dxi_normalised_E_R_F_array.txt")
-# 
 # sum(is.na(lm_d_dxi_normalised_E_R_F_array)) / 37 # check
 # 192 * 144
 
 ### from before
-
 R2_adj_E_R_F_matrix <-
   matrix(as.numeric(readLines("objects/R2_adj_E_R_F_matrix.txt")),
          nrow = length(longitude))
@@ -170,6 +170,7 @@ lm_d_dxi_normalised_E_R_F_array <-
         dim = c(length(longitude), length(latitude), p))
 
 sum(is.na(lm_d_dxi_normalised_E_R_F_array)) / 37 # check
+192 * 144
 
 # GP work for use in AM work ----
 
@@ -180,11 +181,11 @@ n <- nrow(inputs_x_norm_T_matrix)
 library(lhs)
 # library(lhs, lib="C:/Users/smp22ijw/Desktop/Library/") # if Lenovo
 x_star_matrix <- t(randomLHS(N, p))
-x_norm_matrix <- t(inputs_x_norm_T_matrix)
+inputs_x_norm_matrix <- t(inputs_x_norm_T_matrix)
 x_star_T_dataframe <- data.frame(t(x_star_matrix))
 colnames(x_star_T_dataframe) <- colnames(inputs_x_norm_T_matrix)
 # make H_matrix
-H_matrix <- cbind(c(rep(1, n)), t(unname(x_norm_matrix)))
+H_matrix <- cbind(c(rep(1, n)), t(unname(inputs_x_norm_matrix)))
 
 library(fields)
 # library(fields, lib="C:/Users/smp22ijw/Desktop/Library/") # if Lenovo
@@ -196,7 +197,9 @@ corGaussian <- function(inputs, inputs2, phi) {
   delta <- (phi)
   exp(-(rdist(inputs / rep(delta, each = nrow(inputs)), inputs2 / rep(delta, each = nrow(inputs2))) ^ 2))
 }
-
+long <- 1
+lat <- 1
+response <- response_A_O_D_array[long,lat,]
 gp_d_dxi_normalised_function <- function(response) {
   gp <- km(~., 
            design = inputs_x_norm_T_matrix, 
@@ -211,33 +214,82 @@ gp_d_dxi_normalised_function <- function(response) {
   l_hat_diag_matrix <- diag(as.vector(l_hat_matrix))
   # assign(paste0("betas_with_", N, "_gb_", g, "_attempt_", c), gp@trend.coef)
   # assign(paste0("l_hat_with_", N, "_gb_", g, "_attempt_", c), gp@covariance@range.val)
-  x_star_predictions_list <- predict(gp,
+  x_star_preds_list <- predict(gp,
                                      newdata = x_star_T_dataframe,
                                      type="SK"
   )
   A_matrix <-
-    corGaussian(t(x_norm_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
+    corGaussian(inputs_x_norm_T_matrix, inputs_x_norm_T_matrix, 1/sqrt(l_hat_vector))
   # make A_inv_matrix
   A_inv_matrix <- solve(A_matrix)
   
-  # partial derivatives
-  partial_derivatives_dataframe <- data.frame(rep(NA, N))
-  for (i in 2:p) {
-    partial_derivatives_dataframe <- cbind(partial_derivatives_dataframe, 
-                                           data.frame(rep(NA, N)))
-  }
-  colnames(partial_derivatives_dataframe) <- paste0(rep("d_dx_",p), 1:p)
-  
   # make t(x_star)^T
-  t_x_star_T_matrix <- corGaussian(t(x_star_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
+  t_x_star_T_matrix <- corGaussian(t(x_star_matrix), t(inputs_x_norm_matrix), 1/sqrt(l_hat_vector))
+  
+  d_dxi_t_x_star_T_array <- array(NA, c(100000,221,37))
+  for (i in 1:p) {
+    d_dxi_t_x_star_T_array[,,i] <- matrix(rep(x_star_matrix[i,], n), ncol = n) - matrix(rep(inputs_x_norm_matrix[i,], N), ncol = n, byrow = T)
+    cat(i, ", ", sep = "")
+  }
+  
+  k <- 1
+  
+  d_dxi_t_x_star_T_array_2 <- array(NA, c(100000,221,37))
+  for (k in 1:N) {
+    d_dxi_t_x_star_T_array_2[k,,] <-
+      x_star_matrix[,k] - inputs_x_norm_matrix
+    cat(k, ", ", sep = "")
+  }
+  
+  sum(abs(d_dxi_t_x_star_T_array - d_dxi_t_x_star_T_array_2))
+  
+  sum(abs(d_dxi_t_x_star_T_array[,1,1] - d_dxi_t_x_star_T_array_2[,1,1]))
+  
+  d_dxi_t_x_star_T_array <- array(NA, c(100000,221,37))
+  for (i in 1:p) {
+    d_dxi_t_x_star_T_array[,,i] <- -1 / l_hat_matrix[i,]^2 * (matrix(rep(x_star_matrix[i,], n), ncol = n) - matrix(rep(inputs_x_norm_matrix[i,], N), ncol = n, byrow = T)) * t_x_star_T_matrix[,]
+    cat(i, ", ", sep = "")
+  }
+  
+  d_dxi_t_x_star_T_array_2 <- array(NA, c(100000,221,37))
+  for (k in 1:N) {
+    d_dxi_t_x_star_T_array_2[k,,] <-
+      sweep(
+        sweep(inputs_x_norm_matrix - x_star_matrix[,k], MARGIN = 1, 1/(l_hat_vector^2), "*"),
+        MARGIN = 2, t_x_star_T_matrix[k,], "*"
+      )
+    cat(k, ", ", sep = "")
+  }
+  
+  sum(abs(d_dxi_t_x_star_T_array - d_dxi_t_x_star_T_array_2))
+  
+  # partial derivatives attempt 2
+  partial_derivatives_dataframe <- data.frame(matrix(NA, nrow = N, ncol = p))
+  for (k in 1:N) {
+    partial_derivatives_dataframe[k,] <-
+      betas_hat_matrix[2:q] - 
+        sweep(
+          sweep(inputs_x_norm_matrix - x_star_matrix[,k], MARGIN = 1, l_hat_vector^2, "*"),
+          MARGIN = 2, t_x_star_T_matrix[k,], "*"
+        ) %*%
+        A_inv_matrix  %*% (response - H_matrix %*% betas_hat_matrix)
+    cat(k, ", ", sep = "")
+  }
+  sweep(inputs_x_norm_matrix, MARGIN=1, l_hat_vector^2, "*") - x_star_matrix[,1] / l_hat_vector^2 *
+    as.vector(t_x_star_T_matrix[1,] %*% A_inv_matrix  %*% (response - H_matrix %*% betas_hat_matrix))
+  
+  # partial derivatives
+  partial_derivatives_dataframe <- data.frame(matrix(NA, nrow = N, ncol = p))
   
   for (i in 1:p) {
-    d_dxi_t_x_star_T_matrix <- -2 / l_hat_matrix[i,]^2 * (matrix(rep(x_star_matrix[i,], n), ncol = n) - matrix(rep(x_norm_matrix[i,], N), ncol = n, byrow = T)) * t_x_star_T_matrix[,]
+    d_dxi_t_x_star_T_matrix <- -1 / l_hat_matrix[i,]^2 * (matrix(rep(x_star_matrix[i,], n), ncol = n) - matrix(rep(inputs_x_norm_matrix[i,], N), ncol = n, byrow = T)) * t_x_star_T_matrix[,]
     for (k in 1:N) {
       partial_derivatives_dataframe[k,i] <- as.vector(unlist(x_star_matrix[i,k] * betas_hat_matrix[i+1,] - 2 / l_hat_matrix[i,] * d_dxi_t_x_star_T_matrix[k,] %*% A_inv_matrix %*% (response - H_matrix %*% betas_hat_matrix)))
     }
     cat(long, "-", lat, " (", i, "/", p, ") ", sep = "")
   }
+  
+  partial_derivatives_dataframe_2 - partial_derivatives_dataframe
   
   partial_derivatives_normalised_dataframe <- partial_derivatives_dataframe / sqrt(rowSums(partial_derivatives_dataframe^2))
   
@@ -464,7 +516,7 @@ map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 #                   file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))
 #   }
 # }
-# rm("long", "lat", "p", "q", "x_star_matrix", "x_norm_matrix", "x_star_T_dataframe", 
+# rm("long", "lat", "p", "q", "x_star_matrix", "inputs_x_norm_matrix", "x_star_T_dataframe", 
 #    "n", "H_matrix", "corGaussian", "gp_d_dxi_normalised_function", "index_counter")
 
 # export
@@ -566,6 +618,21 @@ plot(R2_adj_AM, xlim = c(0,1), ylim = c(0,1), pch=15, cex=0.5,
 
 rm(AM_A_O_D_versus_E_R_F_matrix)
 
+plot(
+  AM_A_O_D_versus_E_R_F_matrix[blue_black_colours == "blue"] ~
+    AM_A_O_D_versus_E_R_F_all_lm_matrix[blue_black_colours == "blue"],
+  xlab = "Using lm",
+  ylab = "Using gp",
+  pch=20,
+  col = "white"
+)
+abline(0,1)
+text(AM_A_O_D_versus_E_R_F_all_lm_matrix[blue_black_colours == "blue"],
+     AM_A_O_D_versus_E_R_F_matrix[blue_black_colours == "blue"],
+     labels = round(R2_adj_A_O_D_matrix[blue_black_colours == "blue"],2),
+     cex = R2_adj_A_O_D_matrix[blue_black_colours == "blue"]
+)
+
 # Tracking two below-threshold gridboxes
 
 N <- 100000
@@ -648,7 +715,8 @@ image.plot(longitude, latitude,
 map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
 
 ### Attempt 1: 20 re-runs of each, and export ----
-
+AM_A_O_D_versus_E_R_F_all_lm_matrix[44,89]; AM_A_O_D_versus_E_R_F_all_lm_matrix[44,90]
+AM_A_O_D_versus_E_R_F_matrix[44,89]; AM_A_O_D_versus_E_R_F_matrix[44,90]
 long <- 44; lat <- 90
 AM_A_O_D_versus_E_R_F_matrix[long, lat]
 # response <- response_A_O_D_array[long, lat,]
@@ -676,12 +744,12 @@ AM_A_O_D_versus_E_R_F_matrix[long, lat]
 #   l_hat_diag_matrix <- diag(as.vector(l_hat_matrix))
 #   # assign(paste0("betas_with_", N, "_gb_", g, "_attempt_", c), gp@trend.coef)
 #   # assign(paste0("l_hat_with_", N, "_gb_", g, "_attempt_", c), gp@covariance@range.val)
-#   x_star_predictions_list <- predict(gp,
+#   x_star_preds_list <- predict(gp,
 #                                      newdata = x_star_T_dataframe,
 #                                      type="SK"
 #   )
 #   A_matrix <-
-#     corGaussian(t(x_norm_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
+#     corGaussian(t(inputs_x_norm_matrix), t(inputs_x_norm_matrix), 1/sqrt(l_hat_vector))
 #   # make A_inv_matrix
 #   A_inv_matrix <- solve(A_matrix)
 #   
@@ -694,10 +762,10 @@ AM_A_O_D_versus_E_R_F_matrix[long, lat]
 #   colnames(partial_derivatives_dataframe) <- paste0(rep("d_dx_",p), 1:p)
 #   
 #   # make t(x_star)^T
-#   t_x_star_T_matrix <- corGaussian(t(x_star_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
+#   t_x_star_T_matrix <- corGaussian(t(x_star_matrix), t(inputs_x_norm_matrix), 1/sqrt(l_hat_vector))
 #   
 #   for (i in 1:p) {
-#     d_dxi_t_x_star_T_matrix <- -2 / l_hat_matrix[i,]^2 * (matrix(rep(x_star_matrix[i,], n), ncol = n) - matrix(rep(x_norm_matrix[i,], N), ncol = n, byrow = T)) * t_x_star_T_matrix[,]
+#     d_dxi_t_x_star_T_matrix <- -2 / l_hat_matrix[i,]^2 * (matrix(rep(x_star_matrix[i,], n), ncol = n) - matrix(rep(inputs_x_norm_matrix[i,], N), ncol = n, byrow = T)) * t_x_star_T_matrix[,]
 #     for (k in 1:N) {
 #       partial_derivatives_dataframe[k,i] <- as.vector(unlist(x_star_matrix[i,k] * betas_hat_matrix[i+1,] - 2 / l_hat_matrix[i,] * d_dxi_t_x_star_T_matrix[k,] %*% A_inv_matrix %*% (response - H_matrix %*% betas_hat_matrix)))
 #     }
@@ -829,7 +897,7 @@ for (lengths in 1:37) {
 if (R2_adj_A_O_D_matrix[long, lat] < threshold & R2_adj_E_R_F_matrix[long, lat] < threshold)
   write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix),
               file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))
-rm("long", "lat", "p", "q", "x_star_matrix", "x_norm_matrix", "x_star_T_dataframe",
+rm("long", "lat", "p", "q", "x_star_matrix", "inputs_x_norm_matrix", "x_star_T_dataframe",
    "n", "H_matrix", "corGaussian", "gp_d_dxi_normalised_function", "index_counter")
 
 ### Attempt 2: 20 re-runs of each, and export ----
@@ -862,12 +930,12 @@ for (rerun in 1:1) {
   l_hat_diag_matrix <- diag(as.vector(l_hat_matrix))
   # assign(paste0("betas_with_", N, "_gb_", g, "_attempt_", c), gp@trend.coef)
   # assign(paste0("l_hat_with_", N, "_gb_", g, "_attempt_", c), gp@covariance@range.val)
-  x_star_predictions_list <- predict(gp,
+  x_star_preds_list <- predict(gp,
                                      newdata = x_star_T_dataframe,
                                      type="SK"
   )
   A_matrix <-
-    corGaussian(t(x_norm_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
+    corGaussian(t(inputs_x_norm_matrix), t(inputs_x_norm_matrix), 1/sqrt(l_hat_vector))
   # make A_inv_matrix
   A_inv_matrix <- solve(A_matrix)
 
@@ -880,10 +948,10 @@ for (rerun in 1:1) {
   colnames(partial_derivatives_dataframe) <- paste0(rep("d_dx_",p), 1:p)
 
   # make t(x_star)^T
-  t_x_star_T_matrix <- corGaussian(t(x_star_matrix), t(x_norm_matrix), 1/sqrt(l_hat_vector))
+  t_x_star_T_matrix <- corGaussian(t(x_star_matrix), t(inputs_x_norm_matrix), 1/sqrt(l_hat_vector))
 
   for (i in 1:p) {
-    d_dxi_t_x_star_T_matrix <- -2 / l_hat_matrix[i,]^2 * (matrix(rep(x_star_matrix[i,], n), ncol = n) - matrix(rep(x_norm_matrix[i,], N), ncol = n, byrow = T)) * t_x_star_T_matrix[,]
+    d_dxi_t_x_star_T_matrix <- -2 / l_hat_matrix[i,]^2 * (matrix(rep(x_star_matrix[i,], n), ncol = n) - matrix(rep(inputs_x_norm_matrix[i,], N), ncol = n, byrow = T)) * t_x_star_T_matrix[,]
     for (k in 1:N) {
       partial_derivatives_dataframe[k,i] <- as.vector(unlist(x_star_matrix[i,k] * betas_hat_matrix[i+1,] - 2 / l_hat_matrix[i,] * d_dxi_t_x_star_T_matrix[k,] %*% A_inv_matrix %*% (response - H_matrix %*% betas_hat_matrix)))
     }
@@ -1015,7 +1083,7 @@ for (lengths in 1:37) {
 if (R2_adj_A_O_D_matrix[long, lat] < threshold & R2_adj_E_R_F_matrix[long, lat] < threshold)
   write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix),
               file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_0", threshold*100, "_", N, ".txt"))
-rm("long", "lat", "p", "q", "x_star_matrix", "x_norm_matrix", "x_star_T_dataframe",
+rm("long", "lat", "p", "q", "x_star_matrix", "inputs_x_norm_matrix", "x_star_T_dataframe",
    "n", "H_matrix", "corGaussian", "gp_d_dxi_normalised_function", "index_counter")
 
 # Comparison between AM's obtaining with 100 versus 100,000 ----

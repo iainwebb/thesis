@@ -1,0 +1,290 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+  10pt,
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{5}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{wrapfig}
+\usepackage{float}
+\usepackage{colortbl}
+\usepackage{pdflscape}
+\usepackage{tabu}
+\usepackage{threeparttable}
+\usepackage{threeparttablex}
+\usepackage[normalem]{ulem}
+\usepackage{makecell}
+\usepackage{xcolor}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={Response surface alignment measure},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{Response surface alignment measure}
+\author{}
+\date{\vspace{-2.5em}}
+
+\begin{document}
+\maketitle
+
+\section{Set-up}\label{set-up}
+
+AOD at the pair of gridboxes at longitude -171.5625 and latitude 51.875
+and longitude -169.6875 and latitude 51.875 (shown in green and blue
+respectively in Figure 1) are considered, for July.
+
+\begin{figure}
+\centering
+\pandocbounded{\includegraphics[keepaspectratio]{alignment-measure_files/figure-latex/map-of-selected-gridboxes-1.pdf}}
+\caption{Selected gridboxes highlighted in green and blue.}
+\end{figure}
+
+\newpage
+
+\section{Sensitivity analysis}\label{sensitivity-analysis}
+
+Sensitivity analysis is not carried out.
+
+\section{Emulator fit and validation}\label{emulator-fit-and-validation}
+
+To fit the emulator, we assume a linear mean function of the form
+\[\hspace{2.6cm}  m(\textbf{x}) = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \dots + \beta_px_p.\]
+
+The Gauss (squared exponential) kernel is used for the covariance
+function, maximum posterior mode estimation for the parameters estimates
+(trend, range, SD and the nugget term), and the \texttt{RobustGaSP}
+package to fit the emulators.
+
+\begin{longtable}[]{@{}ccc@{}}
+\caption{Estimated parameters}\tabularnewline
+\toprule\noalign{}
+Ranges, trends, variance and nugget & Output 1 & Output 2 \\
+\midrule\noalign{}
+\endfirsthead
+\toprule\noalign{}
+Ranges, trends, variance and nugget & Output 1 & Output 2 \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+1 & 2e+02 & 2e+02 \\
+2 & 4e+02 & 3e+02 \\
+3 & 6e+08 & 4e+28 \\
+4 & 3e+02 & 3e+02 \\
+5 & 7e+08 & 2e+27 \\
+6 & 4e+10 & 6e+27 \\
+7 & 3e+01 & 3e+01 \\
+8 & 6e+01 & 6e+01 \\
+9 & 2e+02 & 2e+02 \\
+10 & 7e+08 & 2e+21 \\
+11 & 1e+02 & 1e+02 \\
+12 & 2e+10 & 3e+35 \\
+13 & 1e+08 & 3e+07 \\
+14 & 9e+07 & 2e+25 \\
+15 & 6e+01 & 6e+01 \\
+16 & 4e+02 & 3e+02 \\
+17 & 2e+02 & 2e+02 \\
+18 & 3e+10 & 8e+25 \\
+19 & 7e+01 & 7e+01 \\
+20 & 3e+02 & 3e+02 \\
+21 & 1e+02 & 1e+02 \\
+22 & 2e+09 & 4e+24 \\
+23 & 2e+08 & 3e+24 \\
+24 & 1e+09 & 1e+29 \\
+25 & 5e+02 & 5e+02 \\
+26 & 2e+09 & 5e+24 \\
+27 & 2e+02 & 2e+02 \\
+28 & 2e+02 & 2e+02 \\
+29 & 3e+09 & 1e+24 \\
+30 & 2e+09 & 8e+25 \\
+31 & 6e+08 & 4e+25 \\
+32 & 8e+01 & 8e+01 \\
+33 & 5e+08 & 2e+21 \\
+34 & 6e+02 & 6e+02 \\
+35 & 8e+01 & 7e+01 \\
+36 & 7e+01 & 7e+01 \\
+37 & 4e+02 & 4e+02 \\
+38 & 9e+01 & 8e+01 \\
+1 & 0e+00 & 0e+00 \\
+2 & 0e+00 & 0e+00 \\
+3 & 0e+00 & 0e+00 \\
+4 & 0e+00 & 0e+00 \\
+5 & 0e+00 & 0e+00 \\
+6 & 0e+00 & 0e+00 \\
+7 & 4e+00 & 4e+00 \\
+8 & 0e+00 & 0e+00 \\
+9 & 0e+00 & 0e+00 \\
+10 & 0e+00 & 0e+00 \\
+11 & 0e+00 & 0e+00 \\
+12 & 0e+00 & 0e+00 \\
+13 & 0e+00 & 0e+00 \\
+14 & 0e+00 & 0e+00 \\
+15 & 0e+00 & 0e+00 \\
+16 & 0e+00 & 0e+00 \\
+17 & 0e+00 & 0e+00 \\
+18 & 0e+00 & 0e+00 \\
+19 & 0e+00 & 0e+00 \\
+20 & 0e+00 & 0e+00 \\
+21 & 0e+00 & 0e+00 \\
+22 & 0e+00 & 0e+00 \\
+23 & 0e+00 & 0e+00 \\
+24 & 0e+00 & 0e+00 \\
+25 & 0e+00 & 0e+00 \\
+26 & 0e+00 & 0e+00 \\
+27 & 0e+00 & 0e+00 \\
+28 & 0e+00 & 0e+00 \\
+29 & 0e+00 & 0e+00 \\
+30 & 0e+00 & 0e+00 \\
+31 & 0e+00 & 0e+00 \\
+32 & 0e+00 & 0e+00 \\
+33 & 0e+00 & 0e+00 \\
+34 & 0e+00 & 0e+00 \\
+35 & 0e+00 & 0e+00 \\
+36 & 0e+00 & 0e+00 \\
+37 & 0e+00 & 0e+00 \\
+1 & 3e+04 & 3e+04 \\
+1 & 0e+00 & 0e+00 \\
+\end{longtable}
+
+For validation of the emulators fitted, as well as calculation of the
+alignment measure, 10000 new LHC points are generated and predictions
+made at these points. The mean width of the 95\% CI's for these
+predictions are shown in Table 3, along with the mean width of the LOO
+CV prediction 95\% CI's. Note that the range of output 1 is 0.6 and of
+output 2 is 0.6.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.0814}}
+  >{\centering\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.3488}}
+  >{\centering\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.3023}}
+  >{\centering\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.2674}}@{}}
+\caption{Validation checks}\tabularnewline
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Output
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+Prediction 95\% CI mean width
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+LOO CV 95\% CI mean width
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+\% validated in LOO CV
+\end{minipage} \\
+\midrule\noalign{}
+\endfirsthead
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Output
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+Prediction 95\% CI mean width
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+LOO CV 95\% CI mean width
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+\% validated in LOO CV
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+1 & 0.1 & 0.1 & 93 \\
+2 & 0.1 & 0.11 & 94 \\
+\end{longtable}
+
+\begin{figure}
+\includegraphics[width=0.5\linewidth]{alignment-measure_files/figure-latex/loo-cv-plots-0, figures-side-1} \includegraphics[width=0.5\linewidth]{alignment-measure_files/figure-latex/loo-cv-plots-0, figures-side-2} \caption{LOO CV validation plot for output 1 (left) and output 2 (right).}\label{fig:loo-cv-plots-0, figures-side}
+\end{figure}
+
+\newpage
+
+\section{Check of by-hand
+calculations}\label{check-of-by-hand-calculations}
+
+\begin{figure}
+\includegraphics[width=0.5\linewidth]{alignment-measure_files/figure-latex/by-hand-checks-1} \includegraphics[width=0.5\linewidth]{alignment-measure_files/figure-latex/by-hand-checks-2} \includegraphics[width=0.5\linewidth]{alignment-measure_files/figure-latex/by-hand-checks-3} \includegraphics[width=0.5\linewidth]{alignment-measure_files/figure-latex/by-hand-checks-4} \caption{The predictions found by-hand match well with those made by the RobustGaSP package (left), with the latter minus the former found to be essentially zero (right). Top: Output 1. Bottom: Output 2.}\label{fig:by-hand-checks}
+\end{figure}
+
+Ahead of performing by-hand calculations of the partial derivatives at
+the testing points, by-hand calculations for the predictions made at
+these points are plotted against the predictions returned by the
+\texttt{RobustGaSP} package (left hand plots in Figure 3) and the
+difference between the two plotted against the test input index (right
+hand plots in Figure 3). Finally, for both we calculate
+\[\dfrac{\sum\limits_{i=1}^{N}\Biggl|\text{(predictions from package)}_{i} - \text{(predictions by-hand)}_{i}\Biggr|}{N},\]
+where \(N\) is the number of test points to get 0 for output 1 and 0 for
+output 2.
+
+\section{Calculation of the alignment
+measure}\label{calculation-of-the-alignment-measure}
+
+Having calculated the emulated partial derivatives for use in the
+alignment measure, and normalising these, we calculate the AM, getting a
+value of 1.
+
+\end{document}

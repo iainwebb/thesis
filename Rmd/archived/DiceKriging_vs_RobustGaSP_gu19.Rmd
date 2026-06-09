@@ -1,0 +1,163 @@
+---
+title: "DiceKriging vs RobustGaSP"
+date: "Gu (2019)"
+output: pdf_document
+fontsize: 10pt
+header-includes:
+  - \usepackage{xcolor}
+  - \definecolor{mybgcolor}{HTML}{ebfff0}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RobustGaSP)
+library(DiceKriging)
+library(knitr)
+library(readr)
+library(lhs)
+options(scipen=999)
+# source R scripts in
+for (f in setdiff(list.files(), 
+                  union(union(union(union(union(union(union(list.files(pattern="*.Rmd"), list.files(pattern="*.pdf")),list.files(pattern="*.db")), list.files(pattern="*_files")), list.files(pattern="*.tex")),list.files(pattern="*.log")),list.files(pattern="*.md")),list.files(pattern="*.html"))
+                  )
+     ) 
+  {
+  source(f)
+  }
+```
+
+<!-- \pagecolor{mybgcolor} -->
+
+# Prediction
+
+We now provide an example in which the input has one dimension, ranging from [0, 10] (Higdon and others (2002)). Estimation of the range parameters using the `RobustGaSP` package can be done through the following code:
+
+```{r}
+library(RobustGaSP)
+library(lhs)
+set.seed(1)
+input <- 10 * maximinLHS(n=15, k=1)
+output <- higdon.1.data(input)
+model <- rgasp(design = input, response = output)
+model
+```
+
+The fourth line of the code generates 15 LH samples at $[0,10]$ through the `maximinLHS` function of the `lhs` package (Carnell (2016)). The function `higdon.1.data` is provided within the `RobustGaSP` package which has the form $y(x) = \sin(2\pi x/10) + 0.2\sin(2\pi x/2.5)$. The third line fits a GaSP model with the robust parameter estimation by marginal posterior modes.
+
+The plot function in `RobustGaSP` package implements the leave-one-out cross validation for a "rgasp" class after the GaSP model is built (see Figure 1 for its output):
+
+```{r, fig.height=8, fig.cap="Figure 1"}
+plot(model)
+```
+
+The prediction at a set of input points can be done by the following code:
+
+```{r}
+testing_input <- as.matrix(seq(0, 10, 1/50))
+model.predict<-predict(model, testing_input)
+names(model.predict)
+```
+
+The predict function generates a list containing the predictive mean, lower and upper 95% quantiles and the predictive standard deviation, at each test point $\textbf{x}^{*}$. The prediction and the real outputs are plotted in Figure 2; produced by the following code:
+
+```{r, fig.cap="Figure 2"}
+testing_output <- higdon.1.data(testing_input)
+plot(testing_input, model.predict$mean,type='l', col='blue',
+     xlab='input', ylab='output')
+polygon( c(testing_input,rev(testing_input)), c(model.predict$lower95,
+                                                rev(model.predict$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,model.predict$mean, type='l', col='blue')
+lines(input, output, type='p')
+```
+
+
+It is also possible to sample from the predictive distribution (which is a multivariate $ distribution) using the following code:
+
+```{r, fig.cap="Figure 3"}
+model.sample <- RobustGaSP::simulate(model, testing_input, num_sample=10)
+matplot(testing_input, model.sample, type='l', xlab='input', ylab='output')
+lines(input, output,type='p')
+```
+
+
+The plots of 10 posterior predictive samples are shown in Figure 3.
+
+\newpage
+
+# Identification of inert inputs
+
+We use 40 maximin LH samples to find inert inputs at the borehole function through the following code.
+
+```{r}
+set.seed(1)
+input <- maximinLHS(n=40, k=8) # maximin lhd sample
+
+# rescale the design to the domain of the borehole function
+LB <- c(0.05, 100, 63070, 990, 63.1, 700, 1120, 9855)
+UB <- c(0.15, 50000, 115600, 1110, 116, 820, 1680, 12045)
+range <- UB - LB
+for(i in 1:8) {
+  input[,i] = LB[i] + range[i] * input[,i]
+}
+num_obs <- dim(input)[1]
+output <- matrix(0,num_obs,1)
+for(i in 1:num_obs) {
+  output[i] <- borehole(input[i,])
+  }
+m <- rgasp(design = input, response = output, lower_bound=FALSE)
+P <- findInertInputs(m)
+```
+
+Similar to the automatic relevance determination model in neural networks, e.g. MacKay (1996); Neal (1996), and in machine learning, e.g. Tipping (2001); Li et al. (2002), the function `findInertInputs` of the `RobustGaSP` package indicates that the 2nd, 3rd, and 5th inputs are suspected to be inert inputs. Figure 4 presents the plots of the borehole function when varying one input at a time. This analyzes the local sensitivity of an input when having the others fixed. Indeed, the output of the borehole function changes very little when the 2nd, 3rd, and 5th inputs vary.
+
+\newpage
+
+# Noisy outputs
+
+Using only the influential inputs of the borehole function, we construct the GaSP emulator with a nugget based on 30 maximin LH samples through the following code:
+
+```{r}
+m.subset <- rgasp(design = input[ ,c(1,4,6,7,8)], response = output,
+                  nugget.est=TRUE)
+m.subset
+```
+
+To compare the performance of the emulator with and without a noise term, we perform some out-of-sample testing. We build the GaSP emulator by the `RobustGaSP` package and the `DiceKriging` package using the same mean and covariance. In `RobustGaSP`, the parameters in the correlation functions are estimated by marginal posterior modes with the robust parameterisation, while in `DiceKriging`, parameters are estimated by MLE with upper and lower bounds. We first construct these four emulators with the following code
+
+```{r}
+m.full <- rgasp(design = input, response = output)
+m.subset <- rgasp(design = input[ ,c(1,4,6,7,8)], response = output,
+                  nugget.est=TRUE)
+dk.full <- km(design = input, response = output)
+dk.subset <- km(design = input[ ,c(1,4,6,7,8)], response = output,
+                nugget.estim=TRUE)
+```
+
+We then compare the performance of the four different emulators at 100 random inputs for the borehole function.
+
+```{r}
+set.seed(1)
+dim_inputs <- dim(input)[2]
+num_testing_input <- 100
+testing_input <- matrix(runif(num_testing_input*dim_inputs),
+                        num_testing_input,dim_inputs)
+for(i in 1:8) {
+  testing_input[,i] <- LB[i] + range[i] * testing_input[,i]
+}
+m.full.predict <- predict(m.full, testing_input)
+m.subset.predict <- predict(m.subset, testing_input[ ,c(1,4,6,7,8)])
+dk.full.predict <- predict(dk.full, newdata = testing_input,type = 'UK', checkNames = F)
+dk.subset.predict <- predict(dk.subset,
+                             newdata = testing_input[ ,c(1,4,6,7,8)],type = 'UK', checkNames = F)
+testing_output <- matrix(0, num_testing_input, 1)
+for(i in 1:num_testing_input) {
+  testing_output[i] <- borehole(testing_input[i, ])
+  }
+m.full.error <- abs(m.full.predict$mean - testing_output)
+m.subset.error <- abs(m.subset.predict$mean - testing_output)
+dk.full.error <- abs(dk.full.predict$mean - testing_output)
+dk.subset.error <- abs(dk.subset.predict$mean - testing_output)
+```
+
+Since the DiceKriging package seems not to have implemented a method to estimate the noise parameter, we only compare it with the nugget case. The box plot of the absolute errors of these 4 emulators (all with the same correlation and mean function) at 100 held-out points are shown in Figure 5. The performance of the RobustGaSP package based on the full set of inputs or only influential inputs with a noise is similar, and they are both better than the predictions from the DiceKriging package.

@@ -1,0 +1,286 @@
+---
+title: "`DiceKriging` vs `RobustGaSP`"
+date: "2D test example"
+output: pdf_document
+fontsize: 10pt
+header-includes:
+  - \usepackage{xcolor}
+  - \definecolor{mybgcolor}{HTML}{ebfff0}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RobustGaSP)
+library(DiceKriging)
+library(knitr)
+library(readr)
+library(lhs)
+options(scipen=999)
+# source R scripts in
+for (f in setdiff(list.files(), 
+                  union(union(union(union(union(union(union(list.files(pattern="*.Rmd"), list.files(pattern="*.pdf")),list.files(pattern="*.db")), list.files(pattern="*_files")), list.files(pattern="*.tex")),list.files(pattern="*.log")),list.files(pattern="*.md")),list.files(pattern="*.html"))
+                  )
+     ) 
+  {
+  source(f)
+  }
+test_function <- "branin"
+```
+
+<!-- \pagecolor{mybgcolor} -->
+
+\begin{center}
+Using the `r test_function` function
+\end{center}
+
+![Fig. 2 from Ensemble of surrogates - Scientific Figure on ResearchGate. Available from: https://www.researchgate.net/figure/Contour-plots-of-two-variable-test-functions-a-Branin-Hoo-function-b-Camelback_fig9_227093096 (accessed 4 Dec 2025). Contour plots of two variable test functions. (a) Branin-Hoo function, (b) Camelback function, (c) Goldstein-Price](U:/ManWin/My Documents/thesis/Rmd/figures_for_Rmd/2D_functions.png)
+    
+```{r, echo=F}
+# dimensional of the inputs
+dim_inputs <- 2   
+# number of the inputs
+num_obs <- 10*dim_inputs
+# starting point for data
+start_point <- 0
+# lhs design
+input <- maximinLHS(n=num_obs, k=dim_inputs)  ##maximin lhd sample
+## Export 
+write_lines(as.vector(input),
+            file=
+              paste0(
+                "U:/ManWin/My Documents/thesis/Rmd/objects_for_Rmd/input_",
+                dim_inputs,
+                "D_",
+                num_obs,
+                "obs.txt")
+            )
+
+## Import
+# input <-
+#   matrix(as.numeric(readLines(paste0("U:/ManWin/My Documents/thesis/Rmd/objects_for_Rmd/input_", dim_inputs, "D_", num_obs, "obs.txt"))),
+#          ncol = dim_inputs)
+
+# outputs
+output <- matrix(apply(input, 1, test_function), nrow = num_obs)
+```
+
+We have a `r dim_inputs`-dimensional input, one output, and `r num_obs` noise-free observations, obtained using the `r test_function` function:
+
+\begin{equation*}
+x_1 = \{`r round(input[,1],2)`\}
+\end{equation*}
+\begin{equation*}
+x_2 = \{`r round(input[,2],2)`\}
+\end{equation*}
+\begin{equation*}
+y = \{`r round(output,2)`\}
+\end{equation*}
+
+Going forward, we will assume a linear mean function of the form $$m(x) = \beta_0 + \beta_1x_1 + \beta_2x_2.$$ In `RobustGaSP`'s `rgasp()` function, this involves specifying the `trend` matrix $H$:
+
+```{r, echo=FALSE}
+H <- H_maker(input)
+H
+```
+
+as well as setting `zero.mean` equal to `"No"`. The Gauss (squared exponential) *and* Matern 5/2 kernels are compared for both packages, using the same four functions created in **`DiceKriging` vs `RobustGaSP`: 1D test example**.
+
+```{r, echo=F, include=F}
+gp_gauss_DK <- gp_km_gauss(input, output)
+gp_matern52_DK <- gp_km_matern52(input, output)
+```
+
+The output from the two `RobustGaSP` functions is shown below (first for the Gauss kernel and second for the Matern 5/2).
+
+```{r, echo=F}
+gp_gauss_RG <- gp_rgasp_gauss(input, output, H)
+gp_matern52_RG <- gp_rgasp_matern52(input, output, H)
+```
+
+```{r testing-inputs, echo=F}
+# number of points to be predicted 
+num_testing_input <- 1000
+
+# generate points to be predicted
+testing_input <- maximinLHS(n=num_testing_input, k=dim_inputs)
+
+## Export 
+# write_lines(as.vector(testing_input),
+#             file=
+#               paste0(
+#                 "U:/ManWin/My Documents/thesis/Rmd/objects_for_Rmd/testing_input_",
+#                 dim_inputs,
+#                 "D.txt")
+#             )
+
+## Import
+testing_input <-
+  matrix(as.numeric(readLines(paste0("U:/ManWin/My Documents/thesis/Rmd/objects_for_Rmd/testing_input_", dim_inputs, "D.txt"))),
+         ncol = dim_inputs)
+```
+
+```{r, echo=F}
+H_testing <- H_maker(testing_input)
+```
+
+```{r perform-predictions, echo=F}
+DK_gauss.predict <- gppred_km(gp_gauss_DK)
+DK_matern52.predict <- gppred_km(gp_matern52_DK)
+
+RG_gauss.predict <- gppred_rgasp(gp_gauss_RG)
+RG_matern52.predict <- gppred_rgasp(gp_matern52_RG)
+```
+
+Two checks are carried out. Firstly, the mean width of the 95% CI returned by each of the four set-ups is calculated. Note that I'm getting matching GPs when using `DiceKriging`.
+
+```{r length_of_cred_int, echo=F}
+# average length of posterior predictive credible interval
+
+length_95CI_DK_gauss <- length_95CI(DK_gauss.predict$lower95, DK_gauss.predict$upper95)
+length_95CI_DK_matern52 <- length_95CI(DK_matern52.predict$lower95, DK_matern52.predict$upper95)
+length_95CI_RG_gauss <- length_95CI(RG_gauss.predict@lower95, RG_gauss.predict@upper95)
+length_95CI_RG_matern52 <- length_95CI(RG_matern52.predict@lower95, RG_matern52.predict@upper95)
+
+RG_vs_DK_summary <- data.frame(
+  cbind(
+    c(rep("DiceKriging",2), rep("RobustGaSP",2)),
+    rep(c("Gauss", "Matern 5/2"), 2),
+    round(c(length_95CI_DK_gauss, length_95CI_DK_matern52, length_95CI_RG_gauss, length_95CI_RG_matern52),4)
+    )
+  )
+colnames(RG_vs_DK_summary) <- c("Package", "Kernel", "Mean width of 95% CI")
+kable(RG_vs_DK_summary, 
+      align=c("l","l","c"),
+      caption = "Mean width of 95% CI"
+      )
+```
+
+Leave-one-out validation for each of the four set-ups produces the results shown in Tables 2-5 below.
+
+```{r, include=F}
+loo_validation_km("gauss")
+loo_validation_km("matern52")
+loo_validation_rgasp("gauss")
+loo_validation_rgasp("matern52")
+```
+
+```{r, echo=F}
+loo_validation_summary(gp_DK_gauss_loo, "DiceKriging", "Gauss")
+```
+
+```{r, echo=F}
+loo_validation_summary(gp_DK_matern52_loo, "DiceKriging", "Matern 5/2")
+```
+
+```{r, echo=F}
+loo_validation_summary(gp_RG_gauss_loo, "RobustGaSP", "Gauss")
+```
+
+```{r, echo=F}
+loo_validation_summary(gp_RG_matern52_loo, "RobustGaSP", "Matern 5/2")
+```
+
+```{r, validation-plots, fig.height=3.5, fig.width=3.5, fig.show="hold", out.width="50%", fig.cap="Xxxxxxx.", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+# DiceKriging's plots
+loo_validation_plot(gp_DK_gauss_loo)
+
+loo_validation_plot(gp_DK_matern52_loo)
+
+# RobustGaSP's plots
+loo_validation_plot(gp_RG_gauss_loo)
+
+loo_validation_plot(gp_RG_matern52_loo)
+
+```
+
+\newpage
+
+Going forward, for now, only the Gauss kernel is dealt with; Matern 5/2 will be returned to once I've figured out the estimates returned by the two packages and the derivative of the Matern 5/2 kernel.
+
+The estimates returned by both packages using the Gauss kernel are shown in Table 6.
+
+```{r, echo=F}
+# parameter estimates
+
+gpests_km(gp_gauss_DK, "gauss")
+gpests_km(gp_matern52_DK, "matern52")
+gpests_rgasp(gp_gauss_RG, "gauss")
+gpests_rgasp(gp_matern52_RG, "matern52")
+
+```
+
+```{r, echo=F}
+RG_vs_DK_estimates <- data.frame(
+  cbind(
+    c("DiceKriging", "RobustGaSP"),
+    rep("Gauss", 2),
+    round(c(gp_dk_gauss_trend_pars[1], gp_rg_gauss_trend_pars[1]),2),
+    round(c(gp_dk_gauss_trend_pars[2], gp_rg_gauss_trend_pars[2]),2),
+    round(c(gp_dk_gauss_trend_pars[3], gp_rg_gauss_trend_pars[3]),2),
+    round(c(gp_dk_gauss_range_pars[1], gp_rg_gauss_range_pars[1] / sqrt(2)),2),
+    round(c(gp_dk_gauss_range_pars[2], gp_rg_gauss_range_pars[2] / sqrt(2)),2),
+    round(c(gp_dk_gauss_sd_par, gp_rg_gauss_sd_par),2)
+    )
+  )
+colnames(RG_vs_DK_estimates) <- c("Package", "Kernel", "Trend 1", "Trend 2", "Trend 3", "Range 1", "Range 2", "Variance")
+kable(RG_vs_DK_estimates, 
+      align=c("l","l","c","c","c","c","c","c"),
+      caption = "Estimates table"
+      )
+```
+
+## Verifying the estimates by-hand for both packages
+
+To calculate the posterior predictions at the `r num_testing_input` testing points by-hand, we require the matrix $H$ containing the inputs for the `r num_obs` observations and well as matrix $A$, its inverse, and $\textbf{t}(x^{*})$ for all 1000 of the new inputs $x^{*}$. $A$ and $\textbf{t}(x^{*})$ are built using the estimate of the range parameter returned by each package. 
+
+```{r, echo=F}
+# make A and A_inv
+
+# using DiceKriging's range estimate(s)
+A_DK <- A_maker_km_gauss(input, gp_dk_gauss_range_pars)
+A_inv_DK <- solve(A_DK)
+
+# using RobustGaSP's range estimate(s)
+A_RG <- A_maker_rgasp_gauss(input, gp_rg_gauss_range_pars)
+A_inv_RG <- solve(A_RG)
+
+# make t
+
+# using DiceKriging's range estimate(s)
+t_DK <- t_maker_km_gauss(input, testing_input, gp_dk_gauss_range_pars)
+
+# using RobustGaSP's range estimate(s)
+t_RG <- t_maker_rgasp_gauss(input, testing_input, gp_rg_gauss_range_pars)
+```
+
+```{r, echo=F}
+
+# DiceKriging's plots
+byhand_preds_DK <- byhand_preds(testing_input,
+                                   gp_dk_gauss_trend_pars,
+                                   t_DK,
+                                   A_inv_DK,
+                                   output,
+                                   H)
+
+
+# RobustGaSP's plots
+byhand_preds_RG <- byhand_preds(testing_input,
+                                   gp_rg_gauss_trend_pars,
+                                   t_RG,
+                                   A_inv_RG,
+                                   output,
+                                   H)
+
+```
+
+```{r, echo = F}
+byhand_scored_DK <- sum(abs(DK_gauss.predict$mean - as.vector(byhand_preds_DK))) / (10^(-8)*num_testing_input)
+
+byhand_scored_RG <- sum(abs(RG_gauss.predict@mean - as.vector(byhand_preds_RG))) / (10^(-8)*num_testing_input)
+```
+
+For both we calculate $$\dfrac{\sum\limits_{i=1}^{1000}\Biggl|\text{(predictions from package)}_{i} - \text{(predictions by-hand)}_{i}\Biggr|}{1000}$$ then divide this by $10^{-8}$ (machine precision) to get `r signif(byhand_scored_DK, 1)` for `DiceKriging` and  `r signif(byhand_scored_RG, 1)` for `RobustGaSP` (the latter approximately a factor of `r round(byhand_scored_RG / byhand_scored_DK)` larger than the former). By-hand predictions therefore match those returned by `DiceKriging` and `RobustGaSP`.

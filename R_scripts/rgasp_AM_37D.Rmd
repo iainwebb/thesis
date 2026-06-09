@@ -1,0 +1,969 @@
+---
+title: "DiceKriging vs RobustGaSP: 37D example"
+date: ""
+output: pdf_document
+fontsize: 10pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "U:/ManWin/My Documents/thesis")
+library(RobustGaSP)
+library(DiceKriging)
+library(knitr)
+library(lhs)
+library(readr)
+library(ncdf4)
+options(scipen=999)
+```
+
+```{r, echo=F}
+# Importing map details ########################################################
+
+## We import the same NetCDF as previously, then extract longitudes and 
+## latitudes, adjusting the longitudes ready for producing maps
+response_AOD_nc <- nc_open(
+  paste("X:/johnson_group/Aerosol-MFR/A-CURE-UKESM1-PPE-Data/Outputs/AOD/ACURE_P3_AOD_Total_jul.nc")
+)
+longitude = ncvar_get(response_AOD_nc,"longitude") - 180
+latitude = ncvar_get(response_AOD_nc,"latitude")
+```
+
+We repeat the verification steps in the 1D example but for data in 37 dimensions. We do it for two outputs, since we'll be wanting to find the alignment measure between a pair of outputs. The outputs are global ERF and AOD for a particular gridbox (first longitude `r longitude[50]`, latitude `r latitude[50]`; next longitude `r longitude[100]`, latitude `r latitude[100]`; and finally for longitude `r longitude[150]`, latitude `r latitude[25]`), both for July, taken from the A-CURE monthly mean PPE from the first version of the U.K. Earth System Model (UKESM1).
+
+```{r 37-code-shelved, echo=F, eval=F}
+# Importing the outputs ########################################################
+
+## AOD is the observable variable. Since it is by-gridbox, it's saved as a
+## NetCDF file, so we first load the required package, with the local code first
+# library(ncdf4, lib="C:/Users/smp22ijw/Desktop/Library/")
+library(ncdf4)
+response_AOD_nc <- nc_open(
+  paste("X:/johnson_group/Aerosol-MFR/A-CURE-UKESM1-PPE-Data/Outputs/AOD/ACURE_P3_AOD_Total_jul.nc")
+)
+response_AOD_all_levels_array <- ncvar_get(response_AOD_nc, names(response_AOD_nc$var))
+
+## We only want level 2, so extract that as a 192 × 144 × 221 array
+response_AOD_array <- response_AOD_all_levels_array[,,2,]
+
+## Remove all unneeded objects
+rm("response_AOD_nc", "response_AOD_all_levels_array")
+
+## We also load required packages, with local code first
+# library(readr, lib="C:/Users/smp22ijw/Desktop/Library/")
+library(fields)
+# library(maps, lib="C:/Users/smp22ijw/Desktop/Library/")
+library(maps)
+
+## Remove all unneeded objects
+rm("response_AOD_nc")
+
+# lm work ######################################################################
+
+## In case linear models are fine, and there's no need to fit GPs, we check 
+# adjusted R^2 values
+
+## For ERF this only needs to be done once
+R2adj_ERF <- summary(
+  lm(ERF ~., data.frame(cbind("ERF" = response_ERF_dataframe, inputs_x_norm_T_matrix)))
+)$adj.r.squared
+
+## Next for AOD, by gridbox
+R2adj_AOD_matrix <- matrix(NA, nrow = 192, ncol = 144)
+for (long in 1:192) {
+  for (lat in 1:144) {
+    df <- data.frame(
+      cbind("AOD" = response_AOD_array[long, lat, ], inputs_x_norm_T_matrix)
+    )
+    R2adj_AOD_matrix[long, lat] <- summary(lm(AOD ~., df))$adj.r.squared
+  }
+  cat(long, "/192 ", sep = "")
+}
+rm("long", "lat", "df")
+
+## We export both objects to /objects, with the import code below
+# write_lines(as.vector(R2adj_AOD_matrix), 
+#             file="objects/R2adj_AOD_matrix.txt")
+R2adj_AOD_matrix <-
+  matrix(as.numeric(readLines("objects/R2adj_AOD_matrix.txt")),
+         nrow = length(longitude))
+# write_lines(R2adj_ERF, 
+#             file="objects/R2adj_ERF.txt")
+R2adj_ERF <-
+  as.numeric(readLines("objects/R2adj_ERF.txt"))
+
+## ERF's adjusted R^2 is low, so we will fit a GP. For AOD, we can produce a
+## table and plots to understand how many and which gridboxes require a GP
+
+table(
+  ifelse(floor(R2adj_AOD_matrix * 10) / 10 < 0.6, "<0.6",
+         floor(R2adj_AOD_matrix * 10) / 10)
+)
+
+100*round(
+  table(
+    ifelse(floor(R2adj_AOD_matrix * 10) / 10 < 0.6, "<0.6",
+           floor(R2adj_AOD_matrix * 10) / 10)
+  ) / (192*144), 3)
+
+hist(R2adj_AOD_matrix, xlim = c(0,1))
+
+image.plot(longitude, latitude,
+           rbind(R2adj_AOD_matrix[97:192,],
+                 R2adj_AOD_matrix[1:96,]),
+           breaks = c(0,0.6,0.7,0.75,0.8,1),
+           col = c("#0000ff","orange","green","yellow", "white"),
+           xlab = "longitude", ylab = "latitude",
+           axis.args=list(
+             at=c(0,0.6,0.7,0.75,0.8,1),
+             labels=as.character(c(0,0.6,0.7,0.75,0.8,1)),
+             mgp=c(3,0.5,0)
+           )
+)
+map("world",lwd=1.2,add=TRUE, lty=1)
+
+## Let's fit an lm for every gridbox, for use with most later on, and also for 
+## comparison when fitting GPs. We'll also set a threshold for the adjusted R^2
+threshold <- 0.60
+
+pdsnormed_AOD_lmall_array <- 
+  pdsnormed_AOD_lmbestNArest_array <- 
+  array(NA, dim = c(length(longitude), length(latitude), p))
+for (long in 1:192) {
+  for (lat in 1:144) {
+    df <- data.frame(
+      cbind("AOD" = response_AOD_array[long, lat, ], inputs_x_norm_T_matrix)
+    )
+    lin_mod <- lm(AOD ~., df)
+    R2adj <- summary(lin_mod)$adj.r.squared
+    pdslm <- as.vector(summary(lin_mod)$coefficients[2-38, 1])
+    pdsnormed_AOD_lmall_array[long, lat,] <- pdslm / sqrt(sum(pdslm^2))
+    pdsnormed_AOD_lmbestNArest_array[long, lat,] <-
+      if (R2adj >= threshold) pdsnormed_AOD_lmall_array[long, lat,]
+    else rep(NA, p)
+  }
+  cat(long, "/192 ", sep = "")
+}
+rm("long", "lat", "df", "lin_mod", "R2adj", "pdslm")
+
+# We'll export both objects, with import code below
+# write_lines(as.vector(pdsnormed_AOD_lmall_array),
+#             file="objects/pdsnormed_AOD_lmall_array.txt")
+pdsnormed_AOD_lmall_array <-
+  array(as.numeric(readLines("objects/pdsnormed_AOD_lmall_array.txt")),
+        dim = c(length(longitude), length(latitude), p))
+# write_lines(as.vector(pdsnormed_AOD_lmbestNArest_array),
+#             file=paste0("objects/pdsnormed_AOD_lmbestNArest_array_0", threshold*100, ".txt"))
+assign(paste0("pdsnormed_AOD_lmbestNArest_array"),
+       array(as.numeric(readLines(paste0("objects/pdsnormed_AOD_lmbestNArest_array_0", threshold*100, ".txt"))),
+             dim = c(length(longitude), length(latitude), p))
+)
+# sum(is.na(pdsnormed_AOD_lmbestNArest_array)) / 37 # check
+```
+
+```{r, echo=F, eval=F}
+
+
+## We define a function called gp_d_dxi_normalised_function which returns the
+## normalised GP estimates of the partial derivatives. It takes as its single
+## argument a 221-long vector or 221 x 1 dataframe of responses
+
+source("./R_scripts/1_gp_d_dxi_normalised_function.R")
+
+## First we'll fit the GP for ERF and calculate the normalised partial
+## derivatives
+gppdnormalised_t_ERF_matrix <- gp_d_dxi_normalised_function(response_ERF_dataframe)
+
+## This produces the following AMs (with the lm-estimated partial derivatives
+## for AOD):
+AM_ERFgp_AODlmall_matrix <- matrix(NA, nrow = 192, ncol = 144)
+for (long in 1:192) {
+  for (lat in 1:144) {
+    AM_ERFgp_AODlmall_matrix[long,lat] <-
+      mean(abs(colSums(gppdnormalised_t_ERF_matrix * matrix(rep(pdsnormed_AOD_lmall_array[long,lat,], N), ncol = N))))
+    # AM_A_O_D_versus_E_R_F_matrix_case1[long, lat] <-
+    #   if (R2_adj_A_O_D_matrix[long, lat] >= threshold & R2_adj_E_R_F_matrix[long, lat] >= threshold)
+    #     abs(sum(lm_best_d_dxi_normalised_A_O_D_array[long, lat,] *
+    #                       lm_d_dxi_normalised_E_R_F_array[long, lat,]))
+    #   else NA
+    # if (R2_adj_A_O_D_matrix[long, lat] >= threshold & R2_adj_E_R_F_matrix[long, lat] >= threshold)
+    #   write_lines(as.vector(AM_A_O_D_versus_E_R_F_matrix_case1),
+    #               file=paste0("objects/AM_A_O_D_versus_E_R_F_matrix_case1_0", threshold*100, "_", N, ".txt"))
+  }
+  cat(long, "/192 ", sep = "")
+}
+
+AM_ERFgp_AODlmbest_matrix <- matrix(NA, nrow = 192, ncol = 144)
+for (long in 1:192) {
+  for (lat in 1:144) {
+    AM_ERFgp_AODlmbest_matrix[long, lat] <-
+      if (R2adj_AOD_matrix[long, lat] < threshold)
+        -0.05
+    else AM_ERFgp_AODlmall_matrix[long, lat]
+  }
+}
+sum(is.na(AM_ERFgp_AODlmbest_matrix))
+
+## We produce a map to show these AMs, excluding the one for which the adjusted
+## R^2 was too low
+image.plot(longitude, latitude,
+           rbind(AM_ERFgp_AODlmbest_matrix[97:192,],
+                 AM_ERFgp_AODlmbest_matrix[1:96,]),
+           breaks = c(-0.1,0,0.1,0.2,0.3,0.4,0.5,
+                      0.6,0.7,0.8,0.9,1),
+           col = c("blue","red4","red3","red1","indianred1", "mistyrose",
+                   "honeydew1", "darkseagreen1", "palegreen2", "seagreen3", 
+                   "springgreen4"),
+           xlab = "longitude", ylab = "latitude",
+           axis.args=list(
+             at=c(-0.06,0,0.1,0.2,0.3,0.4,0.5,
+                  0.6,0.7,0.8,0.9,1),labels=as.character(c("NA",0,0.1,0.2,0.3,0.4,0.5,
+                                                           0.6,0.7,0.8,0.9,1)),mgp=c(3,0.5,0)
+           )
+)
+map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
+
+## as well as one with them all in
+image.plot(longitude, latitude,
+           rbind(AM_ERFgp_AODlmall_matrix[97:192,],
+                 AM_ERFgp_AODlmall_matrix[1:96,]),
+           breaks = c(0,0.1,0.2,0.3,0.4,0.5,
+                      0.6,0.7,0.8,0.9,1),
+           col = c("red4","red3","red1","indianred1", "mistyrose",
+                   "honeydew1", "darkseagreen1", "palegreen2", "seagreen3", 
+                   "springgreen4"),
+           xlab = "longitude", ylab = "latitude",
+           axis.args=list(
+             at=c(0,0.1,0.2,0.3,0.4,0.5,
+                  0.6,0.7,0.8,0.9,1),labels=as.character(c(0,0.1,0.2,0.3,0.4,0.5,
+                                                           0.6,0.7,0.8,0.9,1)),mgp=c(3,0.5,0)
+           )
+)
+map("world",lwd=1.2,add=TRUE, lty=1, col = "black")  
+
+## Next we'll fit GPs for AOD for those gridboxes where the adjusted R^2 was
+## deemed too low. It gets exported each new gridbox that gets added
+
+# AM_ERFgp_AODlmbestgprest_matrix <- matrix(NA, nrow = 192, ncol = 144)
+
+index_counter <- 0
+
+for (long in 1:192) {
+  for (lat in 1:144) {
+    AM_ERFgp_AODlmbestgprest_matrix[long, lat] <-
+      if (R2adj_AOD_matrix[long, lat] < threshold)
+        mean(abs(colSums(gppdnormalised_t_ERF_matrix * gp_d_dxi_normalised_function(response_AOD_array[long, lat,]))))
+    else AM_ERFgp_AODlmall_matrix[long, lat]
+    index_counter <-
+      if (R2adj_AOD_matrix[long, lat] < threshold)
+        index_counter + 1
+    else index_counter
+    if (R2adj_AOD_matrix[long, lat] < threshold)
+      write_lines(as.vector(AM_ERFgp_AODlmbestgprest_matrix),
+                  file=paste0("objects/AM_ERFgp_AODlmbestgprest_matrix_0", threshold*100, "_", N, ".txt"))
+  }
+  write_lines(as.vector(AM_ERFgp_AODlmbestgprest_matrix),
+              file=paste0("objects/AM_ERFgp_AODlmbestgprest_matrix_0", threshold*100, "_", N, ".txt")) 
+}
+# rm("long", "lat", "p", "q", "x_star_matrix", "inputs_x_norm_matrix", "x_star_T_dataframe",
+#    "n", "H_matrix", "corGaussian", "gp_d_dxi_normalised_function", "index_counter")
+
+sum(is.na(AM_ERFgp_AODlmbestgprest_matrix))
+
+range(AM_ERFgp_AODlmbestgprest_matrix)
+
+table(floor(AM_ERFgp_AODlmall_matrix * 10) / 10)
+table(floor(AM_ERFgp_AODlmbest_matrix * 10) / 10)
+table(floor(AM_ERFgp_AODlmbestgprest_matrix * 10) / 10)
+
+100*round(
+  table(
+    ifelse(floor(R2adj_AOD_matrix * 10) / 10 < 0.6, "<0.6",
+           floor(R2adj_AOD_matrix * 10) / 10)
+  ) / (192*144), 3)
+
+hist(R2adj_AOD_matrix, xlim = c(0,1))
+
+image.plot(longitude, latitude,
+           rbind(AM_ERFgp_AODlmbestgprest_matrix[97:192,],
+                 AM_ERFgp_AODlmbestgprest_matrix[1:96,]),
+           breaks = c(0,0.1,0.2,0.3,0.4,0.5,
+                      0.6,0.7,0.8,0.9,1),
+           col = c("red4","red3","red1","indianred1", "mistyrose",
+                   "honeydew1", "darkseagreen1", "palegreen2", "seagreen3", 
+                   "springgreen4"),
+           xlab = "longitude", ylab = "latitude",
+           axis.args=list(
+             at=c(0,0.1,0.2,0.3,0.4,0.5,
+                  0.6,0.7,0.8,0.9,1),labels=as.character(c(0,0.1,0.2,0.3,0.4,0.5,
+                                                           0.6,0.7,0.8,0.9,1)),mgp=c(3,0.5,0)
+           )
+)
+map("world",lwd=1.2,add=TRUE, lty=1, col = "black")
+
+# R2_adj_A_O_D_matrix <-
+#   matrix(as.numeric(readLines("objects/R2_adj_A_O_D_matrix.txt")),
+#          nrow = length(longitude))
+R2adj_AMalllm <- cbind("AOD_R2adj" 
+                       = as.vector(R2adj_AOD_matrix), 
+                       "AM_AOD_versus_ERFalllm_matrix" 
+                       = as.vector(AM_ERFgp_AODlmall_matrix)
+)
+blue_black_colours <- ifelse(as.vector(R2adj_AOD_matrix) < 0.60, "blue", "black")
+plot(R2adj_AMalllm, xlim = c(0,1), ylim = c(0,1), pch=15, cex=0.5,
+     cex.axis = 1.5, cex.lab = 1.5, col = blue_black_colours,
+     xlab = "R2_adj for AOD_Total",
+     ylab = "AM AOD_Total versus ERF")
+R2adj_AM <- cbind("AOD_Total_R2_adj" 
+                  = as.vector(R2adj_AOD_matrix), 
+                  "AM_for_AOD_Total_versus_ERF" 
+                  = as.vector(AM_ERFgp_AODlmbestgprest_matrix)
+)
+plot(R2adj_AM, xlim = c(0,1), ylim = c(0,1), pch=15, cex=0.5,
+     cex.axis = 1.5, cex.lab = 1.5, col = blue_black_colours,
+     xlab = "R2_adj for AOD_Total",
+     ylab = "AM AOD_Total versus ERF")
+
+
+############################
+gped <- 1
+which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)
+AM_gped <- rep(NA, 113)
+for (gped in 1:113) {
+  AM_gped[gped] <- 
+    AM_ERFgp_AODlmbestgprest_matrix[which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[gped,1],
+                                    which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[gped,2]]
+}
+table(floor(AM_gped * 10) / 10)
+which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[which(AM_gped == max(AM_gped)),]
+AM_ERFgp_AODlmbestgprest_matrix[16,51]
+AM_ERFgp_AODlmall_matrix[16,51]
+
+gped_lmAMtoAMgpdiff <- rep(NA, 113)
+for (gped in 1:113) {
+  gped_lmAMtoAMgpdiff[gped] <- 
+    AM_ERFgp_AODlmall_matrix[which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[gped,1],
+                             which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[gped,2]] -
+    AM_ERFgp_AODlmbestgprest_matrix[which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[gped,1],
+                                    which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[gped,2]]
+}
+which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[which(gped_lmAMtoAMgpdiff == max(gped_lmAMtoAMgpdiff))]
+AM_ERFgp_AODlmall_matrix[which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[59,1],
+                         which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[59,2]]
+AM_ERFgp_AODlmbestgprest_matrix[which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[59,1],
+                                which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[59,2]]
+which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[59,]
+
+long <- 142; lat <- 88
+R2adj_AOD_matrix[long, lat] < threshold
+AM_ERFgp_AODlmall_matrix[long, lat]
+AM_ERFgp_AODlmbestgprest_matrix[long, lat]
+# AM_long142lat88 <- rep(NA, 100)
+# loglik_long142lat88 <- rep(NA, 100)
+for (reps in 2:100) {
+  AM_long142lat88[reps] <-
+    mean(abs(colSums(gppdnormalised_t_ERF_matrix * gp_d_dxi_normalised_function(response_AOD_array[long, lat,], reps))))
+  loglik_long142lat88[reps] <- eval(parse(text = paste0("loglik_long142lat88_", reps)))
+}
+AM_long142lat88
+loglik_long142lat88
+stripchart(AM_long142lat88, method = "jitter", pch = 20, col = "blue", main = "One-Dimensional Scatterplot")
+abline(v = AM_ERFgp_AODlmall_matrix[which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[59,1],
+                                    which(R2adj_AOD_matrix < threshold, arr.ind = TRUE)[59,2]])
+```
+
+We import the 221 (normalised) input settings
+
+```{r inputs-import, echo=F}
+input <- 
+  as.matrix(
+    read.csv("X:/johnson_group/Aerosol-MFR/A-CURE-UKESM1-PPE-Data/Design/ACURE-UKESM1-PPE-par-norm-Design.csv")
+  )
+
+# dimension of the inputs
+dim_inputs <- ncol(input)
+
+# number of observations
+num_obs <- nrow(input)
+```
+
+and create the matrix $H$.
+
+```{r, echo=FALSE}
+H_matrix <- cbind(c(rep(1, num_obs)), input)
+```
+
+# Firstly for ERF
+
+We import the outputs.
+
+```{r outputs-import-ERF, echo=F}
+output <- as.matrix(
+  read.table(
+  "X:/johnson_group/Aerosol-MFR/A-CURE-UKESM1-PPE-Data/Outputs/global_mean_forcing/ERF_PPE_global_jul.dat", 
+  col.names = "ERF"
+  )
+)
+```
+
+The 221 observations of ERF look like this when plotted against `r colnames(input)[7]`:
+
+```{r, echo=F, fig.height=3, fig.width=3, fig.align="center"}
+plot(output ~ input[,7], pch=19, col = "blue",
+     xlab = "prim_so4_diam", ylab = "ERF")
+```
+
+We fit an emulator using the `rgasp()` function in the `RobustGaSP` package:
+
+```{r testing-inputs, echo=F}
+# number of points to be predicted 
+num_testing_input <- 1000
+# generate points to be predicted
+# testing_input <- randomLHS(num_testing_input, dim_inputs)
+## Export this to /objects, with the import code below
+# write_lines(as.vector(testing_input),
+#             file="objects/testing_input.txt")
+testing_input <-
+  matrix(as.numeric(readLines("objects/testing_input.txt")),
+         ncol = dim_inputs)
+```
+
+```{r, eval=F}
+rgasp(design = input,
+      response = output,
+      trend = H_matrix,
+      lower_bound=FALSE,
+      kernel_type = 'pow_exp', alpha = rep(2, dim_inputs),
+      zero.mean = "No"
+      )
+```
+
+Here, a constant "mean basis" has been used, with "no constraint on optimization" (as per the `RobustGaSP` package manual). A Gaussian (squared exponential) kernel has been used, and linear mean prior function. \textcolor{teal}{Zero mean should still equal "No"?} We get the following output:
+
+```{r, echo=F}
+gp_RG_gauss<- rgasp(design = input, 
+                    response = output,
+                    trend = H_matrix,
+                    lower_bound=FALSE,
+                    kernel_type = 'pow_exp', alpha = rep(2,dim_inputs),
+                    zero.mean = "No"
+                    )
+# Perform prediction
+RG_gauss.predict<-predict(gp_RG_gauss, testing_input, 
+                    testing_trend = cbind(c(rep(1, num_testing_input)), testing_input),
+                    outasS3 = FALSE)
+```
+
+This can be contrasted with the Matern 5/2 kernel if required.
+
+```{r, echo=F}
+gp_RG_matern52<- rgasp(design = input, 
+                    response = output,
+                    trend = H_matrix,
+                    lower_bound=FALSE,
+                    zero.mean = "No"
+                    )
+# Perform prediction
+RG_matern52.predict<-predict(gp_RG_matern52, testing_input, 
+                    testing_trend = cbind(c(rep(1, num_testing_input)), testing_input),
+                    outasS3 = FALSE)
+```
+
+The posterior mean function for both kernels, as well as that obtained using both kernels in `DiceKriging`'s `km()` function, again with a linear mean prior function, are shown in Figure 1.
+
+```{r, echo=F, include=F}
+gp_DK_gauss<- km(~.,
+                 input,
+                 output,
+                 covtype="gauss",
+                 optim.method="BFGS",
+                 control=list(maxit=500),
+                 nugget=1e-8 * var(output)
+                 )
+# Perform prediction
+DK_gauss.predict<-predict(gp_DK_gauss, testing_input, "SK", checkNames = F)
+
+gp_DK_matern52<- km(~.,
+                 input,
+                 output,
+                 covtype="matern5_2",
+                 optim.method="BFGS",
+                 control=list(maxit=500)
+                 )
+# Perform prediction
+DK_matern52.predict<-predict(gp_DK_matern52, testing_input, "SK", checkNames = F)
+```
+
+I should put in some validation (see 1D example).
+
+The widths of the 95% credible intervals for the two packages are compared:
+
+```{r length_of_cred_int-ERF, echo=F}
+# average length of posterior predictive credible interval
+lengthCI_emulator_function <- function(posterior_lower95, posterior_upper95){
+  sum(posterior_upper95 - posterior_lower95)/num_testing_input
+}
+
+lengthCI_emulator_RG_gauss <- lengthCI_emulator_function(RG_gauss.predict@lower95, RG_gauss.predict@upper95)
+lengthCI_emulator_RG_matern52 <- lengthCI_emulator_function(RG_matern52.predict@lower95, RG_matern52.predict@upper95)
+lengthCI_emulator_DK_gauss <- lengthCI_emulator_function(DK_gauss.predict$lower95, DK_gauss.predict$upper95)
+lengthCI_emulator_DK_matern52 <- lengthCI_emulator_function(DK_matern52.predict$lower95, DK_matern52.predict$upper95)
+```
+
+```{r, echo=F}
+RG_vs_DK_summary <- data.frame(
+  cbind(
+    c(rep("RobustGaSP",2), rep("DiceKriging",2)),
+    rep(c("Gauss", "Matern 5/2"), 2),
+    # c(round(prop_emulator_RG_gauss,2), round(prop_emulator_RG_matern52,2), round(prop_emulator_DK_gauss,2), round(prop_emulator_DK_matern52,2)),
+    # c(signif(MSE_emulator_RG_gauss,1), signif(MSE_emulator_RG_matern52,1), signif(MSE_emulator_DK_gauss,1), signif(MSE_emulator_DK_matern52,1)),
+    c(round(lengthCI_emulator_RG_gauss,4), round(lengthCI_emulator_RG_matern52,4), round(lengthCI_emulator_DK_gauss,4), round(lengthCI_emulator_DK_matern52,4))
+    )
+  )
+colnames(RG_vs_DK_summary) <- c("Package", "Kernel", 
+                                # "Prop. w/n 95% CI", "Out-of-sample MSE", 
+                                "Mean width of 95% CI")
+kable(RG_vs_DK_summary, align=c("l","l",
+                                # "c","c",
+                                "c"))
+```
+
+\textcolor{teal}{This idea was taken from the `RobustGaSP` manual. Is a mean width of `r round(lengthCI_emulator_DK_gauss,2)`, or even `r round(lengthCI_emulator_RG_gauss,2)`, a problem, when the range of the output is `r max(output) - min(output)`?}
+
+## Verifying the estimates by-hand for `DiceKriging`
+
+We already have matrix $H$ (defined earlier for use in the `rgasp` function's `trend` argument). We also need matrix $A$ and its inverse, built using the estimate of the range parameter.
+
+```{r, echo=F}
+lhat_vector_DK <- gp_DK_gauss@covariance@range.val
+lhat_matrix_DK <- matrix(lhat_vector_DK)
+lhatinv_diag_matrix_DK <- diag(x = 1/lhat_vector_DK, nrow = dim_inputs)
+
+lhat_vector_RG <- 1 / gp_RG_gauss@beta_hat
+lhat_matrix_RG <- matrix(lhat_vector_RG)
+lhatinv_diag_matrix_RG <- diag(x = 1/lhat_vector_RG, nrow = dim_inputs)
+
+# We make the matrix A, first for DK
+A_matrix_DK <- matrix(NA, nrow = num_obs, ncol = num_obs)
+for (r in 1:num_obs) {
+  for (c in 1:num_obs) {
+    if (is.na(A_matrix_DK[r,c])) {
+      A_matrix_DK[r,c] <- A_matrix_DK[c,r] <- 
+        exp(-0.5*
+              matrix(input[r,] - input[c,], nrow = 1) %*%
+              (lhatinv_diag_matrix_DK^2) %*%
+              matrix(input[r,] - input[c,], ncol = 1)
+        )
+    }
+  }
+}
+
+Ainv_matrix_DK <- solve(A_matrix_DK)
+
+# and for RG
+A_matrix_RG <- matrix(NA, nrow = num_obs, ncol = num_obs)
+for (r in 1:num_obs) {
+  for (c in 1:num_obs) {
+    if (is.na(A_matrix_RG[r,c])) {
+      A_matrix_RG[r,c] <- A_matrix_RG[c,r] <- 
+        exp(-1*
+              matrix(input[r,] - input[c,], nrow = 1) %*%
+              (lhatinv_diag_matrix_RG^2) %*%
+              matrix(input[r,] - input[c,], ncol = 1)
+        )
+    }
+  }
+}
+
+Ainv_matrix_RG <- solve(A_matrix_RG)
+```
+
+Finally, we need $\textbf{t}(x^{*})$ for all 1000 of the new inputs $x^{*}$.
+
+```{r, echo=F}
+# First for DK
+txstar_T_matrix_DK <- matrix(NA, nrow = num_testing_input, ncol = num_obs)
+for (r in 1:num_testing_input) {
+  for (c in 1:num_obs) {
+    txstar_T_matrix_DK[r,c] <- exp(-0.5 *
+                                  matrix(testing_input[r,] - input[c,], nrow = 1) %*% 
+                                  (lhatinv_diag_matrix_DK^2) %*%
+                                  matrix(testing_input[r,] - input[c,], ncol = 1)
+    )
+  }
+  # cat("txstarT: ", r, "/", num_testing_input, ",", sep = "")
+}
+# and for RG
+txstar_T_matrix_RG <- matrix(NA, nrow = num_testing_input, ncol = num_obs)
+for (r in 1:num_testing_input) {
+  for (c in 1:num_obs) {
+    txstar_T_matrix_RG[r,c] <- exp(-1 *
+                                  matrix(testing_input[r,] - input[c,], nrow = 1) %*% 
+                                  (lhatinv_diag_matrix_RG^2) %*%
+                                  matrix(testing_input[r,] - input[c,], ncol = 1)
+    )
+  }
+  # cat("txstarT: ", r, "/", num_testing_input, ",", sep = "")
+}
+```
+
+We're now ready to calculate posterior predictions for each of the new input settings, using the posterior estimates from the two packages. For both we calculate the following: $$\frac{\Sigma_{i=1}^{1000}\left|\text{(predictions from package)}_{i} - \text{(predictions by-hand)}_{i}\right|}{10^{-8} \times 1000}$$ and get, for `DiceKriging` and `RobustGaSP` respectively:
+
+```{r prediction_comparison-ERF, echo=F}
+betahat_matrix_DK <- matrix(gp_DK_gauss@trend.coef, nrow = dim_inputs+1)
+betahat_matrix_RG <- matrix(gp_RG_gauss@theta_hat, nrow = dim_inputs+1)
+
+my_predictions_DK <- 
+  matrix(c(rep(1, num_testing_input), testing_input), nrow = num_testing_input, byrow = F) %*% 
+  betahat_matrix_DK +
+  txstar_T_matrix_DK %*% Ainv_matrix_DK %*% (as.matrix(output, ncol = num_obs) - H_matrix %*% betahat_matrix_DK)
+
+my_predictions_RG <- 
+  matrix(c(rep(1, num_testing_input), testing_input), nrow = num_testing_input, byrow = F) %*% 
+  betahat_matrix_RG +
+  txstar_T_matrix_RG %*% Ainv_matrix_RG %*% (as.matrix(output, ncol = num_obs) - H_matrix %*% betahat_matrix_RG)
+
+sum(abs(DK_gauss.predict$mean - as.vector(my_predictions_DK))) / (10^(-8)*num_testing_input)
+# sum(abs(DK_matern52.predict$mean - as.vector(my_predictions_DK))) / (10^(-8)*num_testing_input)
+sum(abs(RG_gauss.predict@mean - as.vector(my_predictions_RG))) / (10^(-8)*num_testing_input)
+# sum(abs(RG_matern52.predict@mean - as.vector(my_predictions_RG))) / (10^(-8)*num_testing_input)
+```
+
+\textcolor{teal}{Are these OK? $0-2$ with DK and in the 4000's with RG.}
+
+Finally, we create an object containing the normalised partial derivatives for use in the alignment measure.
+
+```{r, echo=F}
+pd_T_dataframe_DK <- data.frame(matrix(NA, nrow = dim_inputs, ncol = num_testing_input))
+pd_T_dataframe_RG <- data.frame(matrix(NA, nrow = dim_inputs, ncol = num_testing_input))
+
+for (r in 1:dim_inputs) {
+  pd_T_dataframe_DK[r,] <-
+    matrix(betahat_matrix_DK[r+1,], nrow = num_testing_input) + 
+    (((matrix(rep(input[,r], num_testing_input), nrow = num_testing_input, byrow = T) - matrix(rep(testing_input[,r], num_obs), nrow = num_testing_input, byrow = F)) / (lhat_vector_DK[r]^2)) *
+       txstar_T_matrix_DK) %*% 
+    Ainv_matrix_DK %*% (as.matrix(output, ncol = n) - H_matrix %*% betahat_matrix_DK)
+  # cat("pd_t:", r, "/", dim_inputs, ",", sep = "")
+}
+
+pd_dataframe_DK <- t(pd_T_dataframe_DK)
+
+pdnormed_dataframe_DK <- pd_dataframe_DK / sqrt(rowSums(pd_dataframe_DK^2))
+
+pdnormed_T_matrix_DK <- t(data.matrix(pdnormed_dataframe_DK))
+
+gppdnormalised_t_ERF_matrix_DK <- pdnormed_T_matrix_DK
+
+for (r in 1:dim_inputs) {
+  pd_T_dataframe_RG[r,] <-
+    matrix(betahat_matrix_RG[r+1,], nrow = num_testing_input) + 
+    (((matrix(rep(input[,r], num_testing_input), nrow = num_testing_input, byrow = T) - matrix(rep(testing_input[,r], num_obs), nrow = num_testing_input, byrow = F)) / (lhat_vector_RG[r]^2)) *
+       txstar_T_matrix_RG) %*% 
+    Ainv_matrix_RG %*% (as.matrix(output, ncol = n) - H_matrix %*% betahat_matrix_RG)
+  # cat("pd_t:", r, "/", dim_inputs, ",", sep = "")
+}
+
+pd_dataframe_RG <- t(pd_T_dataframe_RG)
+
+pdnormed_dataframe_RG <- pd_dataframe_RG / sqrt(rowSums(pd_dataframe_RG^2))
+
+pdnormed_T_matrix_RG <- t(data.matrix(pdnormed_dataframe_RG))
+
+gppdnormalised_t_ERF_matrix_RG <- pdnormed_T_matrix_RG
+```
+
+# Secondly for AOD
+
+We import the outputs.
+
+```{r, outputs-import-AOD, echo=F}
+library(ncdf4)
+response_AOD_nc <- nc_open(
+  paste("X:/johnson_group/Aerosol-MFR/A-CURE-UKESM1-PPE-Data/Outputs/AOD/ACURE_P3_AOD_Total_jul.nc")
+)
+response_AOD_all_levels_array <- ncvar_get(response_AOD_nc, names(response_AOD_nc$var))
+
+## We only want level 2, so extract that as a 192 × 144 × 221 array
+response_AOD_array <- response_AOD_all_levels_array[,,2,]
+output <- matrix(response_AOD_array[150,25,], ncol=1)
+```
+
+The 221 observations of ERF look like this when plotted against `r colnames(input)[7]`:
+
+```{r, echo=F, fig.height=3, fig.width=3, fig.align="center"}
+plot(output ~ input[,7], pch=19, col = "blue",
+     xlab = "prim_so4_diam", ylab = "ERF")
+```
+
+We fit an emulator using the `rgasp()` function in the `RobustGaSP` package:
+
+```{r, eval=F}
+rgasp(design = input,
+      response = output,
+      trend = H_matrix,
+      lower_bound=FALSE,
+      kernel_type = 'pow_exp', alpha = rep(2,dim_inputs),
+      zero.mean = "No"
+      )
+```
+
+Here, a constant "mean basis" has been used, with "no constraint on optimization" (as per the `RobustGaSP` package manual). A Gaussian (squared exponential) kernel has been used, and linear mean prior function. \textcolor{teal}{Zero mean should still equal "No"?} We get the following output:
+
+```{r, echo=F}
+gp_RG_gauss<- rgasp(design = input, 
+                    response = output,
+                    trend = H_matrix,
+                    lower_bound=FALSE,
+                    kernel_type = 'pow_exp', alpha = rep(2,dim_inputs),
+                    zero.mean = "No"
+                    )
+# Perform prediction
+RG_gauss.predict<-predict(gp_RG_gauss, testing_input, 
+                    testing_trend = cbind(c(rep(1, num_testing_input)), testing_input),
+                    outasS3 = FALSE)
+```
+
+This can be contrasted with the Matern 5/2 kernel if required.
+
+```{r, echo=F}
+gp_RG_matern52<- rgasp(design = input, 
+                    response = output,
+                    trend = H_matrix,
+                    lower_bound=FALSE,
+                    zero.mean = "No"
+                    )
+# Perform prediction
+RG_matern52.predict<-predict(gp_RG_matern52, testing_input, 
+                    testing_trend = cbind(c(rep(1, num_testing_input)), testing_input),
+                    outasS3 = FALSE)
+```
+
+The posterior mean function for both kernels, as well as that obtained using both kernels in `DiceKriging`'s `km()` function, again with a linear mean prior function, are shown in Figure 1.
+
+```{r, echo=F, include=F}
+gp_DK_gauss<- km(~.,
+                 input,
+                 output,
+                 covtype="gauss",
+                 optim.method="BFGS",
+                 control=list(maxit=500),
+                 nugget=1e-8 * var(output)
+                 )
+# Perform prediction
+DK_gauss.predict<-predict(gp_DK_gauss, testing_input, "SK", checkNames = F)
+
+gp_DK_matern52<- km(~.,
+                 input,
+                 output,
+                 covtype="matern5_2",
+                 optim.method="BFGS",
+                 control=list(maxit=500)
+                 )
+# Perform prediction
+DK_matern52.predict<-predict(gp_DK_matern52, testing_input, "SK", checkNames = F)
+```
+
+I should put in some validation (see 1D example).
+
+The widths of the 95% credible intervals for the two packages are compared:
+
+```{r length_of_cred_int-AOD, echo=F}
+# average length of posterior predictive credible interval
+lengthCI_emulator_function <- function(posterior_lower95, posterior_upper95){
+  sum(posterior_upper95 - posterior_lower95)/num_testing_input
+}
+
+lengthCI_emulator_RG_gauss <- lengthCI_emulator_function(RG_gauss.predict@lower95, RG_gauss.predict@upper95)
+lengthCI_emulator_RG_matern52 <- lengthCI_emulator_function(RG_matern52.predict@lower95, RG_matern52.predict@upper95)
+lengthCI_emulator_DK_gauss <- lengthCI_emulator_function(DK_gauss.predict$lower95, DK_gauss.predict$upper95)
+lengthCI_emulator_DK_matern52 <- lengthCI_emulator_function(DK_matern52.predict$lower95, DK_matern52.predict$upper95)
+```
+
+```{r, echo=F}
+RG_vs_DK_summary <- data.frame(
+  cbind(
+    c(rep("RobustGaSP",2), rep("DiceKriging",2)),
+    rep(c("Gauss", "Matern 5/2"), 2),
+    # c(round(prop_emulator_RG_gauss,2), round(prop_emulator_RG_matern52,2), round(prop_emulator_DK_gauss,2), round(prop_emulator_DK_matern52,2)),
+    # c(signif(MSE_emulator_RG_gauss,1), signif(MSE_emulator_RG_matern52,1), signif(MSE_emulator_DK_gauss,1), signif(MSE_emulator_DK_matern52,1)),
+    c(round(lengthCI_emulator_RG_gauss,4), round(lengthCI_emulator_RG_matern52,4), round(lengthCI_emulator_DK_gauss,4), round(lengthCI_emulator_DK_matern52,4))
+    )
+  )
+colnames(RG_vs_DK_summary) <- c("Package", "Kernel", 
+                                # "Prop. w/n 95% CI", "Out-of-sample MSE", 
+                                "Mean width of 95% CI")
+kable(RG_vs_DK_summary, align=c("l","l",
+                                # "c","c",
+                                "c"))
+```
+
+\textcolor{teal}{This idea was taken from the `RobustGaSP` manual. Is a mean width of `r round(lengthCI_emulator_DK_gauss,2)`, or even `r round(lengthCI_emulator_RG_gauss,2)`, a problem, when the range of the output is `r max(output) - min(output)`?}
+
+## Verifying the estimates by-hand for `DiceKriging`
+
+We already have matrix $H$ (defined earlier for use in the `rgasp` function's `trend` argument). We also need matrix $A$ and its inverse, built using the estimate of the range parameter.
+
+```{r, echo=F}
+lhat_vector_DK <- gp_DK_gauss@covariance@range.val
+lhat_matrix_DK <- matrix(lhat_vector_DK)
+lhatinv_diag_matrix_DK <- diag(x = 1/lhat_vector_DK, nrow = dim_inputs)
+
+lhat_vector_RG <- 1 / gp_RG_gauss@beta_hat
+lhat_matrix_RG <- matrix(lhat_vector_RG)
+lhatinv_diag_matrix_RG <- diag(x = 1/lhat_vector_RG, nrow = dim_inputs)
+
+# We make the matrix A, first for DK
+A_matrix_DK <- matrix(NA, nrow = num_obs, ncol = num_obs)
+for (r in 1:num_obs) {
+  for (c in 1:num_obs) {
+    if (is.na(A_matrix_DK[r,c])) {
+      A_matrix_DK[r,c] <- A_matrix_DK[c,r] <- 
+        exp(-0.5*
+              matrix(input[r,] - input[c,], nrow = 1) %*%
+              (lhatinv_diag_matrix_DK^2) %*%
+              matrix(input[r,] - input[c,], ncol = 1)
+        )
+    }
+  }
+}
+
+Ainv_matrix_DK <- solve(A_matrix_DK)
+
+# and for RG
+A_matrix_RG <- matrix(NA, nrow = num_obs, ncol = num_obs)
+for (r in 1:num_obs) {
+  for (c in 1:num_obs) {
+    if (is.na(A_matrix_RG[r,c])) {
+      A_matrix_RG[r,c] <- A_matrix_RG[c,r] <- 
+        exp(-1*
+              matrix(input[r,] - input[c,], nrow = 1) %*%
+              (lhatinv_diag_matrix_RG^2) %*%
+              matrix(input[r,] - input[c,], ncol = 1)
+        )
+    }
+  }
+}
+# A_matrix_RG <- A_matrix_RG + diag(1e-8 * as.vector(var(output)), 221)
+
+Ainv_matrix_RG <- solve(A_matrix_RG)
+```
+
+\textcolor{teal}{Only for the second gridbox, I received the error} Error in solve.default(A_matrix_RG) -
+system is computationally singular- reciprocal condition number = 1.69941e-17 \textcolor{teal}{so added a tiny nugget to the diagonal of $A$, then it inverted just fine.}
+
+Finally, we need $\textbf{t}(x^{*})$ for all 1000 of the new inputs $x^{*}$.
+
+```{r, echo=F}
+# First for DK
+txstar_T_matrix_DK <- matrix(NA, nrow = num_testing_input, ncol = num_obs)
+for (r in 1:num_testing_input) {
+  for (c in 1:num_obs) {
+    txstar_T_matrix_DK[r,c] <- exp(-0.5 *
+                                  matrix(testing_input[r,] - input[c,], nrow = 1) %*% 
+                                  (lhatinv_diag_matrix_DK^2) %*%
+                                  matrix(testing_input[r,] - input[c,], ncol = 1)
+    )
+  }
+  # cat("txstarT: ", r, "/", num_testing_input, ",", sep = "")
+}
+# and for RG
+txstar_T_matrix_RG <- matrix(NA, nrow = num_testing_input, ncol = num_obs)
+for (r in 1:num_testing_input) {
+  for (c in 1:num_obs) {
+    txstar_T_matrix_RG[r,c] <- exp(-1 *
+                                  matrix(testing_input[r,] - input[c,], nrow = 1) %*% 
+                                  (lhatinv_diag_matrix_RG^2) %*%
+                                  matrix(testing_input[r,] - input[c,], ncol = 1)
+    )
+  }
+  # cat("txstarT: ", r, "/", num_testing_input, ",", sep = "")
+}
+```
+
+We're now ready to calculate posterior predictions for each of the new input settings, using the posterior estimates from the two packages. For both we calculate the following: $$\frac{\Sigma_{i=1}^{1000}\left|\text{(predictions from package)}_{i} - \text{(predictions by-hand)}_{i}\right|}{10^{-8} \times 1000}$$ and get, for `DiceKriging` and `RobustGaSP` respectively:
+
+```{r prediction_comparison-AOD, echo=F}
+betahat_matrix_DK <- matrix(gp_DK_gauss@trend.coef, nrow = dim_inputs+1)
+betahat_matrix_RG <- matrix(gp_RG_gauss@theta_hat, nrow = dim_inputs+1)
+
+my_predictions_DK <- 
+  matrix(c(rep(1, num_testing_input), testing_input), nrow = num_testing_input, byrow = F) %*% 
+  betahat_matrix_DK +
+  txstar_T_matrix_DK %*% Ainv_matrix_DK %*% (as.matrix(output, ncol = num_obs) - H_matrix %*% betahat_matrix_DK)
+
+my_predictions_RG <- 
+  matrix(c(rep(1, num_testing_input), testing_input), nrow = num_testing_input, byrow = F) %*% 
+  betahat_matrix_RG +
+  txstar_T_matrix_RG %*% Ainv_matrix_RG %*% (as.matrix(output, ncol = num_obs) - H_matrix %*% betahat_matrix_RG)
+
+sum(abs(DK_gauss.predict$mean - as.vector(my_predictions_DK))) / (10^(-8)*num_testing_input)
+# sum(abs(DK_matern52.predict$mean - as.vector(my_predictions_DK))) / (10^(-8)*num_testing_input)
+sum(abs(RG_gauss.predict@mean - as.vector(my_predictions_RG))) / (10^(-8)*num_testing_input)
+# sum(abs(RG_matern52.predict@mean - as.vector(my_predictions_RG))) / (10^(-8)*num_testing_input)
+```
+
+\textcolor{teal}{Are these OK? Close to 1 (or 0) with DK and $\sim900$, $>90,000,000$ and $\sim1000$ (for the three gridboxes respectively) with RG.}
+
+Finally, we create an object containing the normalised partial derivatives for use in the alignment measure.
+
+```{r, echo=F}
+pd_T_dataframe_DK <- data.frame(matrix(NA, nrow = dim_inputs, ncol = num_testing_input))
+pd_T_dataframe_RG <- data.frame(matrix(NA, nrow = dim_inputs, ncol = num_testing_input))
+
+for (r in 1:dim_inputs) {
+  pd_T_dataframe_DK[r,] <-
+    matrix(betahat_matrix_DK[r+1,], nrow = num_testing_input) + 
+    (((matrix(rep(input[,r], num_testing_input), nrow = num_testing_input, byrow = T) - matrix(rep(testing_input[,r], num_obs), nrow = num_testing_input, byrow = F)) / (lhat_vector_DK[r]^2)) *
+       txstar_T_matrix_DK) %*% 
+    Ainv_matrix_DK %*% (as.matrix(output, ncol = n) - H_matrix %*% betahat_matrix_DK)
+  # cat("pd_t:", r, "/", dim_inputs, ",", sep = "")
+}
+
+pd_dataframe_DK <- t(pd_T_dataframe_DK)
+
+pdnormed_dataframe_DK <- pd_dataframe_DK / sqrt(rowSums(pd_dataframe_DK^2))
+
+pdnormed_T_matrix_DK <- t(data.matrix(pdnormed_dataframe_DK))
+
+gppdnormalised_t_AOD_matrix_DK <- pdnormed_T_matrix_DK
+
+for (r in 1:dim_inputs) {
+  pd_T_dataframe_RG[r,] <-
+    matrix(betahat_matrix_RG[r+1,], nrow = num_testing_input) + 
+    (((matrix(rep(input[,r], num_testing_input), nrow = num_testing_input, byrow = T) - matrix(rep(testing_input[,r], num_obs), nrow = num_testing_input, byrow = F)) / (lhat_vector_RG[r]^2)) *
+       txstar_T_matrix_RG) %*% 
+    Ainv_matrix_RG %*% (as.matrix(output, ncol = n) - H_matrix %*% betahat_matrix_RG)
+  # cat("pd_t:", r, "/", dim_inputs, ",", sep = "")
+}
+
+pd_dataframe_RG <- t(pd_T_dataframe_RG)
+
+pdnormed_dataframe_RG <- pd_dataframe_RG / sqrt(rowSums(pd_dataframe_RG^2))
+
+pdnormed_T_matrix_RG <- t(data.matrix(pdnormed_dataframe_RG))
+
+gppdnormalised_t_AOD_matrix_RG <- pdnormed_T_matrix_RG
+```
+
+# AM calculation
+
+Finally we calculate the alignment measure.
+
+```{r, include=F}
+mean(abs(colSums(gppdnormalised_t_ERF_matrix_DK * gppdnormalised_t_AOD_matrix_DK)))
+mean(abs(colSums(gppdnormalised_t_ERF_matrix_RG * gppdnormalised_t_AOD_matrix_RG)))
+```
+
+Attempt  AM for ERF and AOD in gb 1                     AM for ERF and AOD in gb 2                     AM for ERF and AOD in gb 3
+-------- ---------------------------------------------- ---------------------------------------------- ----------------------------------------------
+1        0.2815566                                      0.2118547                                      0.2562991
+2        0.2825316                                      0.2118477                                      0.2601877
+3        0.2652177                                      0.2117447                                      0.2601681
+4        0.2647665                                      0.211873                                       0.2197906
+5        0.2653364                                      0.2118245                                      0.2834103
+6        0.2821098                                      0.1850545                                      0.2906794
+7        0.2653951                                      0.2040215                                      0.2541661
+8        0.2648363                                      0.2118733                                      0.2600939
+9        0.2653367                                      0.1116973                                      0.2562923
+10       0.2701372                                      0.2118717                                      0.2599827
+Robust   0.01612035                                     0.2331373                                      0.01426525

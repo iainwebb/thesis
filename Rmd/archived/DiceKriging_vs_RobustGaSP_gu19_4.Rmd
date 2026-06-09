@@ -1,0 +1,299 @@
+---
+title: "RobustGaSP: Bayesian vs MLE"
+date: "Gu (2019)"
+output: pdf_document
+fontsize: 10pt
+header-includes:
+  - \usepackage{xcolor}
+  - \definecolor{mybgcolor}{HTML}{ebfff0}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RobustGaSP)
+# library(DiceKriging)
+library(knitr)
+library(readr)
+library(lhs)
+options(scipen=999)
+# source R scripts in
+for (f in setdiff(list.files(), 
+                  union(union(union(union(union(union(union(list.files(pattern="*.Rmd"), list.files(pattern="*.pdf")),list.files(pattern="*.db")), list.files(pattern="*_files")), list.files(pattern="*.tex")),list.files(pattern="*.log")),list.files(pattern="*.md")),list.files(pattern="*.html"))
+                  )
+     ) 
+  {
+  source(f)
+  }
+```
+
+<!-- \pagecolor{mybgcolor} -->
+
+# Examples
+
+## The modified sine wave function
+
+It is expected that, for a one-dimensional function, both packages will perform well with an adequate number of design points, so we start with the function called the modified sine wave discussed in Gu (2016). It has the form $$y = 3\sin(5\pi x) + \cos(7\pi x),$$
+where $x = [0, 10]$. We first perform emulation based on 12 equally spaced design points on [0,1].
+
+```{r, fig.height=3, fig.width=4}
+sinewave <- function(x) {
+  3*sin(5*pi*x)*x + cos(7*pi*x)
+  }
+input <- as.matrix(seq(0, 1, 1/11))
+output <- sinewave(input)
+plot(output ~ input)
+```
+
+The GaSP model is attempted to be fitted with the `RobustGaSP` package, using the marginal posterior mode for estimation (the default in `RobustGaSP`) first, then maximum likelihood estimation second, both time with a Gauss kernel.
+
+```{r}
+m.pm <- rgasp(design=input, response=output,
+           kernel_type = 'pow_exp', 
+           alpha = rep(2, ncol(input)),
+           )
+m.pm
+```
+
+```{r}
+m.mle <- rgasp(design=input, response=output,
+           kernel_type = 'pow_exp', 
+           alpha = rep(2, ncol(input)),
+           method = "mle"
+           )
+m.mle
+```
+
+Using marginal posterior mode, the estimated range parameter is found to be around `r round(1 / m.pm@beta_hat,2)` in the `RobustGaSP` package and `r round(1 / m.mle@beta_hat,2)` when using MLE. To see which estimate is better, we perform prediction on 100 test points, equally spaced in [0,1].
+
+```{r}
+testing_input <- as.matrix(seq(0, 1, 1/99))
+m.pm.predict <- RobustGaSP::predict(
+  m.pm, 
+  testing_input
+  )
+m.mle.predict <- RobustGaSP::predict(
+  m.mle, 
+  testing_input
+  )
+testing_output <- sinewave(testing_input)
+```
+
+The emulation results are plotted in Figure 2. 
+
+```{r, echo=F}
+plot(testing_input, m.pm.predict$mean,type='l', col='blue',
+     xlab='input', ylab='output',
+     ylim = c(-5,5))
+polygon( c(testing_input,rev(testing_input)), c(m.pm.predict$lower95,
+                                                rev(m.pm.predict$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,m.pm.predict$mean, type='l', col='blue')
+lines(testing_input,m.mle.predict$mean, type='l', col='red')
+lines(input, output, type='p', pch=19, cex=0.5)
+```
+
+Note that the red curve from the `DiceKriging` package degenerates to the fitted mean with spikes at the design points. This unsatisfying phenomenon, discussed in Gu et al. (2018), happens when the estimated covariance matrix is close to an identity matrix, i.e., $\hat{\textbf{R}} \approx \textbf{I}_n$, or equivalently $\hat{\gamma}$ tends to 0. Repeated runs of the `DiceKriging` package under different initializations yielded essentially the same results.
+
+```{r, echo=F}
+estimates <- data.frame(
+  cbind(
+    c("Marginal posterior mode", "Maximum likelihood estimation"),
+    c("Gauss", "Gauss"),
+    round(c(m.pm@theta_hat, m.mle@theta_hat),2),
+    round(c(1/m.pm@beta_hat, 1/m.mle@beta_hat),2),
+    round(c(m.pm@sigma2_hat, m.mle@sigma2_hat),2)
+    )
+  )
+colnames(estimates) <- c("RobustGaSP method", "Kernel", "Trend", "Range", "Variance")
+kable(estimates, 
+      align=c("l","l","c","c","c"),
+      caption = "Estimates table with 12 observations"
+      )
+```
+
+To compare the performance, we calculate the root mean square errors (RMSE) for both methods, $$RMSE = \sqrt{\dfrac{\Sigma_{i=1}
+^{n^*} (\hat{y}(\textbf{x}_i^*) - y(\textbf{x}_i^*))^2}{n^*}},$$
+where $y(\textbf{x}_i^*)$ is the $i$-th held-out output and $\hat{y}(\textbf{x}_i^*)$ is the prediction for $\textbf{x}_i^*$ by the emulator, for $i = 1, \dots, n^*$.
+
+```{r}
+m.pm.rmse <- sqrt(mean((m.pm.predict$mean - testing_output)^2))
+m.pm.rmse
+
+m.mle.rmse <- sqrt(mean((m.mle.predict$mean - testing_output)^2))
+m.mle.rmse
+```
+
+```{r, fig.cap="Figure 8"}
+plot(m.pm.predict$mean ~ testing_output,
+     col="blue", pch=19, cex=0.25,
+     xlab = "model", ylab = "emulator")
+points(m.mle.predict$mean ~ testing_output,
+       col="red", pch=19, cex=0.25)
+abline(0,1)
+```
+
+The RMSE when using the marginal posterior mode for estimation `r m.pm.rmse` and when using maximum likelihood estimation is `r m.mle.rmse`. The predictions versus the real outputs are plotted in Figure 8. The blue dots correspond to the predictive means using the marginal posterior mode and are closer to the real output than the red dots produced when using maximum likelihood estimation. Since both packages use the same correlation and mean function, the only difference lies in the method of parameter estimation, especially estimation of the range parameters, $\gamma$. Use of the marginal posterior mode seems to do better, leading to much smaller RMSE in out-of-sample prediction.
+
+Next we'll perform LOO cross validation.
+
+```{r, fig.show="hold", out.width="50%", fig.height=2.90, echo=F}
+m.pm.loo <- leave_one_out_rgasp(m.pm)
+m.mle.loo <- leave_one_out_rgasp(m.mle)
+
+m.pm.loo.cols <- cols <- rep("red", nrow(input))
+m.pm.loo.cols[output >= (m.pm.loo$mean - qnorm(0.975)*m.pm.loo$sd) &
+                output <= (m.pm.loo$mean + qnorm(0.975)*m.pm.loo$sd)] <- "black"
+plot(m.pm.loo$mean ~ output,
+       xlim = c(min(m.pm.loo$mean - qnorm(0.975)*m.pm.loo$sd), 
+                max(m.pm.loo$mean + qnorm(0.975)*m.pm.loo$sd)),
+       ylim = c(min(m.pm.loo$mean - qnorm(0.975)*m.pm.loo$sd), 
+                max(m.pm.loo$mean + qnorm(0.975)*m.pm.loo$sd)),
+       col = m.pm.loo.cols, pch = 20,
+       xlab = "Model", ylab = "Emulator")
+  abline(0,1, col="blue")
+  segments(output,
+           m.pm.loo$mean - qnorm(0.975)*m.pm.loo$sd,
+           output,
+           m.pm.loo$mean + qnorm(0.975)*m.pm.loo$sd,
+           col = m.pm.loo.cols)
+
+m.mle.loo.cols <- cols <- rep("red", nrow(input))
+m.mle.loo.cols[output >= (m.mle.loo$mean - qnorm(0.975)*m.mle.loo$sd) &
+                output <= (m.mle.loo$mean + qnorm(0.975)*m.mle.loo$sd)] <- "black"
+plot(m.mle.loo$mean ~ output,
+       xlim = c(min(m.mle.loo$mean - qnorm(0.975)*m.mle.loo$sd), 
+                max(m.mle.loo$mean + qnorm(0.975)*m.mle.loo$sd)),
+       ylim = c(min(m.mle.loo$mean - qnorm(0.975)*m.mle.loo$sd), 
+                max(m.mle.loo$mean + qnorm(0.975)*m.mle.loo$sd)),
+       col = m.mle.loo.cols, pch = 20,
+       xlab = "Model", ylab = "Emulator")
+  abline(0,1, col="blue")
+  segments(output,
+           m.mle.loo$mean - qnorm(0.975)*m.mle.loo$sd,
+           output,
+           m.mle.loo$mean + qnorm(0.975)*m.mle.loo$sd,
+           col = m.mle.loo.cols)
+```
+
+## Verifying the estimates by-hand for both packages
+
+To calculate the posterior predictions at the `r nrow(testing_input)` testing points by-hand, we require the matrix $H$ containing the inputs for the observations and well as matrix $A$, its inverse, and $\textbf{t}(x^{*})$ for all `r nrow(testing_input)` of the new inputs $x^{*}$. $A$ and $\textbf{t}(x^{*})$ are built using the estimate of the range parameter returned by each package. By-hand predictions match those returned by `DiceKriging` (Figure 2) and `RobustGaSP` (Figure 3).
+
+```{r estimated-pars, echo=F}
+m.pm.trends <- m.pm@theta_hat
+m.pm.ranges <- (1 / m.pm@beta_hat)
+m.pm.var <- m.pm@sigma2_hat
+
+m.mle.trends <- m.mle@theta_hat
+m.mle.ranges <- (1 / m.mle@beta_hat)
+m.mle.var <- m.mle@sigma2_hat
+```
+
+```{r, echo=F}
+# H
+# H <- H_maker(input)
+H <- cbind(c(rep(1, nrow(input))))
+
+# make A and A_inv
+m.pm.A <- A_maker_rgasp_gauss(input, m.pm.ranges)
+m.pm.A.inv <- solve(m.pm.A)
+
+m.mle.A <- A_maker_rgasp_gauss(input, m.mle.ranges)
+m.mle.A.inv <- solve(m.mle.A)
+
+# make t
+m.pm.t <- t_maker_rgasp_gauss(input, testing_input, m.pm.ranges)
+
+m.mle.t <- t_maker_rgasp_gauss(input, testing_input, m.mle.ranges)
+```
+
+```{r by-hand-predicitons, echo=F}
+m.pm.preds.byhand <- matrix(c(rep(1, nrow(testing_input))), 
+                            nrow = nrow(testing_input), byrow = F) %*% m.pm.ranges +
+  m.pm.t %*% 
+  m.pm.A.inv %*% 
+  (as.matrix(output, ncol = nrow(output)) - H %*% m.pm.ranges)
+start_point <- 0; amount <- 0.25
+plot_preds_vs_byhand_RG(input, output, testing_input, m.pm.predict, m.pm.preds.byhand)
+
+m.mle.preds.byhand <- matrix(
+  c(rep(1, nrow(testing_input))), 
+  nrow = nrow(testing_input), byrow = F
+  ) %*% m.mle.ranges +
+  m.mle.t %*% 
+  m.mle.A.inv %*% 
+  (as.matrix(output, ncol = nrow(output)) - H %*% m.mle.ranges)
+start_point <- 0; amount <- 0.25
+plot_preds_vs_byhand_RG(input, output, testing_input, m.mle.predict, m.mle.preds.byhand)
+
+```
+
+
+```{r, figures-side, fig.show="hold", out.width="50%", fig.cap="The predictions found by-hand match well with those made by both packages (left), with the latter minus the former found to be essentially zero (right). Top: DiceKriging. Bottom: RobustGaSP.", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+# DiceKriging's plots
+byhand_preds_DK <- matrix(
+  c(rep(1, nrow(testing_input))), 
+  nrow = nrow(testing_input), byrow = F
+  ) %*% gp_dk_gauss_range_pars +
+  t_DK %*% 
+  A_inv_DK %*% 
+  (as.matrix(output, ncol = nrow(output)) - H %*% gp_dk_gauss_range_pars)
+
+plot(NULL,
+     xlim = c(start_point-amount,start_point+1+amount),
+     ylim = c(min(dk.predict.12$mean),max(dk.predict.12$mean)),
+     xlab="input",
+     ylab="output"
+)
+legend("topleft",
+       c("DiceKriging","by-hand","observations"),
+       fill=c("black","red","blue")
+)
+#
+points(dk.predict.12$mean ~ testing_input, pch=20, cex=0.75)
+
+points(byhand_preds_DK ~ testing_input, pch=4, cex=0.25, col = "red")
+
+points(output ~ input, pch=19, col="blue", cex=1.2)
+
+# RobustGaSP's plots
+byhand_preds_RG <- matrix(
+  c(rep(1, nrow(testing_input))), 
+  nrow = nrow(testing_input), byrow = F
+  ) %*% gp_rg_gauss_range_pars +
+  t_DK %*% 
+  A_inv_DK %*% 
+  (as.matrix(output, ncol = nrow(output)) - H %*% gp_rg_gauss_range_pars)
+
+plot(NULL,
+     xlim = c(start_point-amount,start_point+1+amount),
+     ylim = c(min(m.predict.12$mean),max(m.predict.12$mean)),
+     xlab="input",
+     ylab="output"
+)
+legend("topleft",
+       c("RobustGaSP","by-hand","observations"),
+       fill=c("black","red","blue")
+)
+#
+points(m.predict.12$mean ~ testing_input, pch=20, cex=0.75)
+
+points(byhand_preds_RG ~ testing_input, pch=4, cex=0.25, col = "red")
+
+points(output ~ input, pch=19, col="blue", cex=1.2)
+
+
+```
+
+```{r, echo = F}
+byhand_scored_DK <- sum(abs(DK_gauss.predict$mean - as.vector(byhand_preds_DK))) / (10^(-8)*num_testing_input)
+
+byhand_scored_RG <- sum(abs(RG_gauss.predict@mean - as.vector(byhand_preds_RG))) / (10^(-8)*num_testing_input)
+```
+
+For both we calculate $$\dfrac{\sum\limits_{i=1}^{1000}\Biggl|\text{(predictions from package)}_{i} - \text{(predictions by-hand)}_{i}\Biggr|}{1000}$$ then divide this by $10^{-8}$ (machine precision) to get `r signif(byhand_scored_DK, 1)` for `DiceKriging` and  `r signif(byhand_scored_RG, 1)` for `RobustGaSP` (the latter approximately a factor of `r round(byhand_scored_RG / byhand_scored_DK)` larger than the former).
+
+\textcolor{teal}{Why don't RobustGaSP's estimates change? What is the stochastic element of DiceKriging?}

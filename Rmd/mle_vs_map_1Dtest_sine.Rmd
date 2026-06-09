@@ -1,0 +1,420 @@
+---
+title: "`RobustGaSP`: Marginal posterior mode estimate vs maximum likelikehood estimation"
+date: "1D test example"
+output: pdf_document
+fontsize: 10pt
+header-includes:
+  - \usepackage{xcolor}
+  - \definecolor{mybgcolor}{HTML}{ffebf5}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RobustGaSP)
+# library(DiceKriging)
+library(knitr)
+library(readr)
+library(lhs)
+options(scipen=999)
+# source R scripts in
+for (f in setdiff(list.files(), 
+                  union(union(union(union(union(union(union(union(list.files(pattern="*.Rmd"), list.files(pattern="*.pdf")),list.files(pattern="*.db")), list.files(pattern="*_files")), list.files(pattern="*.tex")),list.files(pattern="*.log")),list.files(pattern="*.md")),list.files(pattern="*.html")),list.files(pattern="*archived"))
+                  )
+     ) 
+  {
+  source(f)
+  }
+```
+
+<!-- \pagecolor{mybgcolor} -->
+
+```{r, echo=F}
+# dimensional of the inputs
+dim_inputs <- 1    
+# number of the inputs
+num_obs <- 5
+# starting point for data
+start_point <- 0
+# uniform samples of design
+input <- matrix(seq(start_point + 0.1, start_point + 0.9, length.out=num_obs), num_obs)
+# Following codes use maximin Latin Hypercube Design, which is typically better than uniform
+# library(lhs)
+# input <- maximinLHS(n=num_obs, k=dim_inputs)  ##maximin lhd sample
+
+# outputs from 2sin(3x)
+test_function_1D <- function(x) {
+  2*sin(3*x - 0.5)
+  }
+output <- matrix(test_function_1D(input), num_obs)
+
+# test_function_1D <- function(x) {
+#   2*sin(7*x - 0.5)+0.5
+#   }
+# output <- matrix(test_function_1D(input), num_obs)
+```
+
+We have a `r dim_inputs`-dimensional input, one output, and `r num_obs` noise-free observations, obtained using the function $f(x) = 2\sin(3x - 0.5)$:
+
+\begin{equation*}
+x = \{`r input`\}
+\end{equation*}
+\begin{equation*}
+y = \{`r round(output,2)`\}
+\end{equation*}
+
+which is plotted in Figure 1.
+
+```{r, echo=F, fig.height=3.5, fig.width=3.5, fig.align="center", fig.cap="1D example observations"}
+plot(output ~ input, xlim = c(0,1), pch=19, col = "blue")
+```
+
+Going forward, we will assume a linear mean function of the form $$m(x) = \beta_0 + \beta_1x.$$ In `RobustGaSP`'s `rgasp()` function, this involves specifying the `trend` matrix $H$:
+
+```{r, echo=FALSE}
+H <- H_maker(input)
+H
+```
+
+as well as setting `zero.mean` equal to `"No"`. The Gauss (squared exponential) *and* Matern 5/2 kernels will be are compared for both estimation methods. The output from these four `rgasp` calls is shown below, first using maximum likelihood estimation for the Gauss and Matern 5/2 kernels respectively, and second using marginal posterior mode estimation for the Gauss and Matern 5/2 kernels respectively.
+
+```{r, echo=F}
+m.mle.gauss <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No",
+                     kernel_type = 'pow_exp', alpha = rep(2, ncol(input)),        # squared exponential
+                     method = "mle"                                               # maximum likelihood estimation
+                     )
+
+m.mle.matern52 <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No",
+                     method = "mle"                                               # maximum likelihood estimation
+                     )
+
+m.pm.gauss <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No",
+                     kernel_type = 'pow_exp', alpha = rep(2, ncol(input)),        # squared exponential
+                     )
+
+m.pm.matern52 <- rgasp(design = input, response = output, trend = H, lower_bound=FALSE, zero.mean = "No"
+                     )
+```
+
+```{r testing-inputs, echo=F}
+# number of points to be predicted 
+num_testing_input <- 1000
+
+# generate points to be predicted
+# testing_input <- matrix(sort(runif(num_testing_input*dim_inputs)), num_testing_input,dim_inputs)
+amount <- 0.25
+testing_input <- matrix(seq(start_point-amount,start_point+1+amount, length.out = num_testing_input))
+
+## Export 
+# write_lines(as.vector(testing_input),
+#             file=
+#               paste0(
+#                 "U:/ManWin/My Documents/thesis/Rmd/objects_for_Rmd/testing_input_",
+#                 dim_inputs,
+#                 "D.txt")
+#             )
+
+## Import
+# testing_input <-
+#   matrix(as.numeric(readLines(paste0("U:/ManWin/My Documents/thesis/Rmd/objects_for_Rmd/testing_input_", dim_inputs, "D.txt"))),
+#          ncol = dim_inputs)
+```
+
+To visualise the posterior mean functions returned by these four functions, predictions are made at `r num_testing_input` new points on the range $[0,1]$. Once again, `rgasp` requires specification of the `trend' matrix $H$, this time containing the testing inputs.
+
+```{r, echo=F}
+H_testing <- H_maker(testing_input)
+```
+
+```{r perform-predictions, echo=F}
+m.mle.gauss.predict <- RobustGaSP::predict(m.mle.gauss, testing_input, testing_trend = H_testing)
+
+m.mle.matern52.predict <- RobustGaSP::predict(m.mle.matern52, testing_input, testing_trend = H_testing)
+
+m.pm.gauss.predict <- RobustGaSP::predict(m.pm.gauss, testing_input, testing_trend = H_testing)
+
+m.pm.matern52.predict <- RobustGaSP::predict(m.pm.matern52, testing_input, testing_trend = H_testing)
+```
+
+These `r num_testing_input` points are plotted in Figure 2 (red line), along with 95% credible intervals (red dashed line) along with the actual function (black line) and `r num_obs` observations (blue points).
+
+```{r, fig.show="hold", out.width="50%", fig.cap="Top: Maximum likelihood estimation for the Gauss (left) and Matern 5/2 (right) kernels. Bottom: Marginal posterior mode estimation for the Gauss (left) and Matern 5/2 (right) kernels.", echo=F}
+plot1_function <- function(posterior_mean, posterior_lower95, posterior_upper95){
+  plot(testing_input, test_function_1D(testing_input),
+       main="",
+       xlab="input",
+       ylab="output",
+       type="l",
+       col="black",
+       ylim=c(min(posterior_lower95), max(posterior_upper95))
+       # ylim=c(-1.1, 2.1)
+       )
+  lines(testing_input,posterior_mean, col="red")
+  lines(testing_input,posterior_lower95, col="red", lty = "dashed")
+  lines(testing_input,posterior_upper95, col="red", lty = "dashed")
+  points(input, output, pch=19, col="blue")
+  legend("topleft",
+         c("actual","observations","prediction"),
+         fill=c("black","blue","red")
+  )
+}
+
+par(mar = c(4, 4, .1, .1))
+plot1_function(m.mle.gauss.predict$mean, m.mle.gauss.predict$lower95, m.mle.gauss.predict$upper95)
+plot1_function(m.mle.matern52.predict$mean, m.mle.matern52.predict$lower95, m.mle.matern52.predict$upper95)
+plot1_function(m.pm.gauss.predict$mean, m.pm.gauss.predict$lower95, m.pm.gauss.predict$upper95)
+plot1_function(m.pm.matern52.predict$mean, m.pm.matern52.predict$lower95, m.pm.matern52.predict$upper95)
+```
+
+Various checks are performed (as in the example from `RobustGaSP`'s Help page):
+
+```{r, echo=F}
+# actual output values
+testing_output <- test_function_1D(testing_input)
+```
+
+```{r prop_in_cred_int, echo=F}
+# proportion covered by 95% posterior predictive credible interval
+
+# m.mle.gauss.95CIprop
+prop_wn_95CI_DK_gauss <- prop_wn_95CI(
+  m.mle.gauss.predict$lower95, m.mle.gauss.predict$upper95
+  )
+
+prop_wn_95CI_DK_matern52 <- prop_wn_95CI(
+  m.mle.matern52.predict$lower95, m.mle.matern52.predict$upper95
+  )
+
+prop_wn_95CI_RG_gauss <- prop_wn_95CI(
+  m.pm.gauss.predict$lower95, m.pm.gauss.predict$upper95
+  )
+
+prop_wn_95CI_RG_matern52 <- prop_wn_95CI(
+  m.pm.matern52.predict$lower95, m.pm.matern52.predict$upper95
+  )
+```
+
+```{r MSE, echo=F}
+# out of sample MSE
+
+MSE_emulator_DK_gauss <- 
+  MSE(m.mle.gauss.predict$mean, testing_output)
+
+MSE_emulator_DK_matern52 <- 
+  MSE(m.mle.matern52.predict$mean, testing_output)
+
+MSE_emulator_RG_gauss <- 
+  MSE(m.pm.gauss.predict$mean, testing_output)
+
+MSE_emulator_RG_matern52 <- 
+  MSE(m.pm.matern52.predict$mean, testing_output)
+```
+
+```{r length_of_cred_int, echo=F}
+# average length of posterior predictive credible interval
+
+length_95CI_RG_gauss <- length_95CI(m.pm.gauss.predict$lower95, m.pm.gauss.predict$upper95)
+
+length_95CI_RG_matern52 <- length_95CI(m.pm.matern52.predict$lower95, m.pm.matern52.predict$upper95)
+
+length_95CI_DK_gauss <- length_95CI(m.mle.gauss.predict$lower95, m.mle.gauss.predict$upper95)
+
+length_95CI_DK_matern52 <- length_95CI(m.mle.matern52.predict$lower95, m.mle.matern52.predict$upper95)
+```
+
+```{r checks-summary, echo=F}
+checks_per_estimation <- data.frame(
+  cbind(
+    c(rep("Maximum likelihood",2), rep("Marginal post. mode",2)),
+    rep(c("Gauss", "Matern 5/2"), 2),
+    round(c(prop_wn_95CI_DK_gauss, prop_wn_95CI_DK_matern52, prop_wn_95CI_RG_gauss, prop_wn_95CI_RG_matern52),2),
+    signif(c(MSE_emulator_DK_gauss, MSE_emulator_DK_matern52, MSE_emulator_RG_gauss, MSE_emulator_RG_matern52),1),
+    round(c(length_95CI_DK_gauss, length_95CI_DK_matern52, length_95CI_RG_gauss, length_95CI_RG_matern52),4)
+    )
+  )
+colnames(checks_per_estimation) <- c("Estimate method", "Kernel", "Prop. w/n 95% CI", "Out-of-sample MSE", "Mean width of 95% CI")
+kable(checks_per_estimation, 
+      align=c("l","l","c","c","c"),
+      caption = "RobustGaSP manual's suite of checks"
+      )
+```
+
+Finally, in preparation for the real world data where we cannot perform out-of-sample validation, we'll perform leave-one-out validation: for each of the observations, fitting a GP using all observations except this one, then using the fitted emulator to predict the output at the excluded observation's input setting. The 95% credible interval for each prediction is checked against the actual output value, and the proportion of these CI's that contain the respective observation is found. The results are shown in Tables 2-5 below.
+
+```{r, include=F}
+m_mle_loo(input, output, "gauss")
+m_mle_loo(input, output, "matern52")
+m_pm_loo(input, output, "gauss")
+m_pm_loo(input, output, "matern52")
+```
+
+```{r, echo=F}
+loo_validation_summary(m.mle.gauss.loo, "Maximum likelihood", "Gauss")
+```
+
+```{r, echo=F}
+loo_validation_summary(m.mle.gauss.loo, "Maximum likelihood", "Matern 5/2")
+```
+
+```{r, echo=F}
+loo_validation_summary(m.pm.gauss.loo, "Marginal post. mode", "Gauss")
+```
+
+```{r, echo=F}
+loo_validation_summary(m.pm.gauss.loo, "Marginal post. mode", "Matern 5/2")
+```
+
+```{r, validation-plots, fig.show="hold", out.width="50%", fig.cap="LOO cross validation. Top: Maximum likelihood estimation for the Gauss (left) and Matern 5/2 (right) kernels. Bottom: Marginal posterior mode estimation for the Gauss (left) and Matern 5/2 (right) kernels.", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+# MLE plots
+loo_validation_plot(m.mle.gauss.loo)
+
+loo_validation_plot(m.mle.matern52.loo)
+
+# PM plots
+loo_validation_plot(m.pm.gauss.loo)
+
+loo_validation_plot(m.pm.matern52.loo)
+
+```
+
+\newpage
+
+Going forward, for now, only the Gauss kernel is dealt with; Matern 5/2 will be returned to once I've figured out the estimates returned by the two packages and the derivative of the Matern 5/2 kernel. The estimates returned by both estimation methods using the Gauss kernel are shown in Table 6.
+
+```{r, echo=F}
+# parameter estimates
+
+m_ests(m.mle.gauss, "mle", "gauss")
+
+m_ests(m.pm.gauss, "pm", "gauss")
+```
+
+```{r, echo=F}
+estimates_per_estimation <- data.frame(
+  cbind(
+    c("MLE", "PM"),
+    rep("Gauss", 2),
+    round(c(m.mle.gauss.trends[1], m.pm.gauss.trends[1]),2),
+    round(c(m.mle.gauss.trends[2], m.pm.gauss.trends[2]),2),
+    round(c(m.mle.gauss.ranges, m.pm.gauss.ranges),2),
+    round(c(m.mle.gauss.var, m.pm.gauss.var),2)
+    )
+  )
+colnames(estimates_per_estimation) <- c("Estimation", "Kernel", "Trend 1", "Trend 2", "Range", "Variance")
+kable(estimates_per_estimation, 
+      align=c("l","l","c","c","c","c"),
+      caption = "Estimates table"
+      )
+```
+
+## Verifying the estimates by-hand for both estimation methods
+
+To calculate the posterior predictions at the `r num_testing_input` testing points by-hand, we require the matrix $H$ containing the inputs for the `r num_obs` observations and well as matrix $A$, its inverse, and $\textbf{t}(x^{*})$ for all 1000 of the new inputs $x^{*}$. $A$ and $\textbf{t}(x^{*})$ are built using the estimate of the range parameter returned by each package. By-hand predictions match those returned by the two estimation methods (Figure 4).
+
+```{r, echo=F}
+# make A and A_inv
+
+# using range estimate(s) from MLE
+m.mle.gauss.A <- A_maker(input, m.mle.gauss.ranges)
+m.mle.gauss.A.inv <- solve(m.mle.gauss.A)
+
+# using range estimate(s) from PM
+m.pm.gauss.A <- A_maker(input, m.pm.gauss.ranges)
+m.pm.gauss.A.inv <- solve(m.pm.gauss.A)
+
+# make t
+
+# using MLE range estimate(s)
+m.mle.gauss.t <- t_maker(input, testing_input, m.mle.gauss.ranges)
+
+# using PM range estimate(s)
+m.pm.gauss.t <- t_maker(input, testing_input, m.pm.gauss.ranges)
+```
+
+```{r, figures-side, fig.show="hold", out.width="50%", fig.cap="The predictions found by-hand match well with those made by both estimation methods (left), with the latter minus the former found to be essentially zero (right). Top: MLE/ Bottom: RM.", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+# MLE plots
+m.mle.gauss.predictbyhand <- byhand_preds(testing_input,
+                                   m.mle.gauss.trends,
+                                   m.mle.gauss.t,
+                                   m.mle.gauss.A.inv,
+                                   output,
+                                   H)
+
+m_pred_plots(input, output, testing_input, m.mle.gauss.predict, m.mle.gauss.predictbyhand)
+
+# PM plots
+m.pm.gauss.predictbyhand <- byhand_preds(testing_input,
+                                   m.pm.gauss.trends,
+                                   m.pm.gauss.t,
+                                   m.pm.gauss.A.inv,
+                                   output,
+                                   H)
+
+m_pred_plots(input, output, testing_input, m.pm.gauss.predict, m.pm.gauss.predictbyhand)
+
+```
+
+```{r, echo = F}
+m.mle.gauss.score <- sum(abs(m.mle.gauss.predict$mean - as.vector(m.mle.gauss.predictbyhand))) / (10^(-8)*num_testing_input)
+
+m.pm.gauss.score <- sum(abs(m.pm.gauss.predict$mean - as.vector(m.pm.gauss.predictbyhand))) / (10^(-8)*num_testing_input)
+```
+
+For both we calculate $$\dfrac{\sum\limits_{i=1}^{1000}\Biggl|\text{(predictions from package)}_{i} - \text{(predictions by-hand)}_{i}\Biggr|}{1000}$$ then divide this by $10^{-8}$ (machine precision) to get `r signif(m.mle.gauss.score, 1)` for MLE and `r signif(m.pm.gauss.score, 1)` for PM (the latter approximately a factor of `r round(m.pm.gauss.score / m.mle.gauss.score)` larger than the former).
+
+\textcolor{teal}{Why don't RobustGaSP's estimates change? What is the stochastic element of DiceKriging?}
+
+Finally, we create an object containing the normalised partial derivatives for use in the alignment measure.
+
+```{r, echo=F}
+m.mle.gauss.pds <- data.frame(matrix(NA, nrow = dim_inputs, ncol = num_testing_input))
+for (r in 1:dim_inputs) {
+  m.mle.gauss.pds[r,] <-
+    matrix(m.mle.gauss.trends[r+1], nrow = num_testing_input) + 
+    ((2*(matrix(rep(input[,r], num_testing_input), nrow = num_testing_input, byrow = T) - matrix(rep(testing_input[,r], num_obs), nrow = num_testing_input, byrow = F)) / (m.mle.gauss.ranges[r]^2)) *
+       m.mle.gauss.t) %*% 
+    m.mle.gauss.A.inv %*% (as.matrix(output, ncol = n) - H %*% m.mle.gauss.trends)
+  # cat("pd_t:", r, "/", dim_inputs, ",", sep = "")
+}
+m.mle.gauss.pdsnormed <- m.mle.gauss.pds / sqrt(rowSums(m.mle.gauss.pds^2))
+
+m.pm.gauss.pds <- data.frame(matrix(NA, nrow = dim_inputs, ncol = num_testing_input))
+for (r in 1:dim_inputs) {
+  m.pm.gauss.pds[r,] <-
+    matrix(m.pm.gauss.trends[r+1], nrow = num_testing_input) + 
+    ((2*(matrix(rep(input[,r], num_testing_input), nrow = num_testing_input, byrow = T) - matrix(rep(testing_input[,r], num_obs), nrow = num_testing_input, byrow = F)) / (m.pm.gauss.ranges[r]^2)) *
+       m.pm.gauss.t) %*% 
+    m.pm.gauss.A.inv %*% (as.matrix(output, ncol = n) - H %*% m.pm.gauss.trends)
+  # cat("pd_t:", r, "/", dim_inputs, ",", sep = "")
+}
+m.pm.gauss.pdsnormed <- m.pm.gauss.pds / sqrt(rowSums(m.pm.gauss.pds^2))
+```
+
+We check that the emulated derivative approximately matches the derivative of the actual function.
+
+```{r, fig.show="hold", out.width="50%", fig.cap="The estimation of the derivative found by each estimation method matches the true derivative well (left), with the latter minus the former found to be essentially zero (right). Top: DiceKriging. Bottom: RobustGaSP.", echo=F}
+
+par(mar = c(4, 4, .1, .1))
+
+# MLE plots
+
+test_derivative_1D <- function(x) {
+  6*cos(3*x - 0.5)
+}
+
+actual <- data.frame(rep(NA, num_testing_input))
+colnames(actual) <- "mean"
+actual$mean <- test_derivative_1D(testing_input)
+
+m_pred_plots(input, output, testing_input, actual, as.vector(t(m.mle.gauss.pds)))
+
+# PM plots
+
+m_pred_plots(input, output, testing_input, actual, as.vector(t(m.pm.gauss.pds)))
+
+```

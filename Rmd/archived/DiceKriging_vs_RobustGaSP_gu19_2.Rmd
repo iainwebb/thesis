@@ -1,0 +1,549 @@
+---
+title: "DiceKriging vs RobustGaSP"
+date: "Gu (2019)"
+output: pdf_document
+fontsize: 10pt
+header-includes:
+  - \usepackage{xcolor}
+  - \definecolor{mybgcolor}{HTML}{ebfff0}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RobustGaSP)
+library(DiceKriging)
+library(knitr)
+library(readr)
+library(lhs)
+options(scipen=999)
+# source R scripts in
+for (f in setdiff(list.files(), 
+                  union(union(union(union(union(union(union(list.files(pattern="*.Rmd"), list.files(pattern="*.pdf")),list.files(pattern="*.db")), list.files(pattern="*_files")), list.files(pattern="*.tex")),list.files(pattern="*.log")),list.files(pattern="*.md")),list.files(pattern="*.html"))
+                  )
+     ) 
+  {
+  source(f)
+  }
+```
+
+<!-- \pagecolor{mybgcolor} -->
+
+# The statistical framework
+
+## Prediction
+
+We now provide an example in which the input has one dimension, ranging from [0, 10] (Higdon and others (2002)). Estimation of the range parameters using the `RobustGaSP` package can be done through the following code:
+
+```{r}
+library(RobustGaSP)
+library(lhs)
+set.seed(1)
+input <- 10 * maximinLHS(n=15, k=1)
+output <- higdon.1.data(input)
+model <- rgasp(design = input, response = output)
+model
+```
+
+The fourth line of the code generates 15 LH samples at $[0,10]$ through the `maximinLHS` function of the `lhs` package (Carnell (2016)). The function `higdon.1.data` is provided within the `RobustGaSP` package which has the form $y(x) = \sin(2\pi x/10) + 0.2\sin(2\pi x/2.5)$. The third line fits a GaSP model with the robust parameter estimation by marginal posterior modes.
+
+The plot function in `RobustGaSP` package implements the leave-one-out cross validation for a "rgasp" class after the GaSP model is built (see Figure 1 for its output):
+
+```{r, fig.height=6, fig.width=3, fig.cap="Figure 1"}
+plot(model)
+```
+
+The prediction at a set of input points can be done by the following code:
+
+```{r}
+testing_input <- as.matrix(seq(0, 10, 1/50))
+model.predict<-predict(model, testing_input)
+names(model.predict)
+```
+
+The predict function generates a list containing the predictive mean, lower and upper 95% quantiles and the predictive standard deviation, at each test point $\textbf{x}^{*}$. The prediction and the real outputs are plotted in Figure 2, produced by the following code:
+
+```{r, fig.cap="Figure 2"}
+testing_output <- higdon.1.data(testing_input)
+plot(testing_input, model.predict$mean,type='l', col='blue',
+     xlab='input', ylab='output')
+polygon( c(testing_input,rev(testing_input)), c(model.predict$lower95,
+                                                rev(model.predict$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,model.predict$mean, type='l', col='blue')
+lines(input, output, type='p')
+```
+
+It is also possible to sample from the predictive distribution (which is a multivariate $t$ distribution) using the following code:
+
+```{r, fig.cap="Figure 3"}
+model.sample <- RobustGaSP::simulate(model, testing_input, num_sample=10)
+matplot(testing_input, model.sample, type='l', xlab='input', ylab='output')
+lines(input, output,type='p')
+```
+
+The plots of 10 posterior predictive samples are shown in Figure 3.
+
+\newpage
+
+## Identification of inert inputs
+
+We use 40 maximin LH samples to find inert inputs at the borehole function through the following code.
+
+```{r}
+set.seed(1)
+input <- maximinLHS(n=40, k=8) # maximin lhd sample
+
+# rescale the design to the domain of the borehole function
+LB <- c(0.05, 100, 63070, 990, 63.1, 700, 1120, 9855)
+UB <- c(0.15, 50000, 115600, 1110, 116, 820, 1680, 12045)
+range <- UB - LB
+for(i in 1:8) {
+  input[,i] = LB[i] + range[i] * input[,i]
+}
+num_obs <- dim(input)[1]
+output <- matrix(0,num_obs,1)
+for(i in 1:num_obs) {
+  output[i] <- borehole(input[i,])
+  }
+m <- rgasp(design = input, response = output, lower_bound=FALSE)
+P <- findInertInputs(m)
+```
+
+Similar to the automatic relevance determination model in neural networks, e.g. MacKay (1996); Neal (1996), and in machine learning, e.g. Tipping (2001); Li et al. (2002), the function `findInertInputs` of the `RobustGaSP` package indicates that the 2nd, 3rd, and 5th inputs are suspected to be inert inputs. Figure 4 presents the plots of the borehole function when varying one input at a time. This analyzes the local sensitivity of an input when having the others fixed. Indeed, the output of the borehole function changes very little when the 2nd, 3rd, and 5th inputs vary.
+
+\newpage
+
+## Noisy outputs
+
+Using only the influential inputs of the borehole function, we construct the GaSP emulator with a nugget based on 30 maximin LH samples through the following code:
+
+```{r}
+m.subset <- rgasp(design = input[ ,c(1,4,6,7,8)], response = output,
+                  nugget.est=TRUE)
+m.subset
+```
+
+To compare the performance of the emulator with and without a noise term, we perform some out-of-sample testing. We build the GaSP emulator by the `RobustGaSP` package and the `DiceKriging` package using the same mean and covariance. In `RobustGaSP`, the parameters in the correlation functions are estimated by marginal posterior modes with the robust parameterisation, while in `DiceKriging`, parameters are estimated by MLE with upper and lower bounds. We first construct these four emulators with the following code
+
+```{r}
+m.full <- rgasp(design = input, response = output)
+m.subset <- rgasp(design = input[ ,c(1,4,6,7,8)], response = output,
+                  nugget.est=TRUE)
+dk.full <- km(design = input, response = output)
+dk.subset <- km(design = input[ ,c(1,4,6,7,8)], response = output,
+                nugget.estim=TRUE)
+```
+
+We then compare the performance of the four different emulators at 100 random inputs for the borehole function.
+
+```{r}
+set.seed(1)
+dim_inputs <- dim(input)[2]
+num_testing_input <- 100
+testing_input <- matrix(runif(num_testing_input*dim_inputs),
+                        num_testing_input,dim_inputs)
+for(i in 1:8) {
+  testing_input[,i] <- LB[i] + range[i] * testing_input[,i]
+}
+m.full.predict <- predict(m.full, testing_input)
+m.subset.predict <- predict(m.subset, testing_input[ ,c(1,4,6,7,8)])
+dk.full.predict <- predict(dk.full, newdata = testing_input,type = 'UK', checkNames = F)
+dk.subset.predict <- predict(dk.subset,
+                             newdata = testing_input[ ,c(1,4,6,7,8)],type = 'UK', checkNames = F)
+testing_output <- matrix(0, num_testing_input, 1)
+for(i in 1:num_testing_input) {
+  testing_output[i] <- borehole(testing_input[i, ])
+  }
+m.full.error <- abs(m.full.predict$mean - testing_output)
+m.subset.error <- abs(m.subset.predict$mean - testing_output)
+dk.full.error <- abs(dk.full.predict$mean - testing_output)
+dk.subset.error <- abs(dk.subset.predict$mean - testing_output)
+```
+
+Since the DiceKriging package seems not to have implemented a method to estimate the noise parameter, we only compare it with the nugget case. The box plot of the absolute errors of these 4 emulators (all with the same correlation and mean function) at 100 held-out points are shown in Figure 5. The performance of the RobustGaSP package based on the full set of inputs or only influential inputs with a noise is similar, and they are both better than the predictions from the DiceKriging package.
+
+```{r}
+boxplot(
+  cbind(m.full.error, m.subset.error, dk.full.error, dk.subset.error),
+  names = c("RG full", "Subset", "DK full", "Subset")
+  )
+```
+
+# An overview of RobustGaSP
+
+## Main functions
+
+* The mean and variance parameters are handled in a fully Bayesian way.
+
+* The range parameters in the correlation function are estimated by numerical search for the marginal posterior modes in Equation (6). These can also be fixed, instead of estimating them. The maximum number of iterations and tolerance bounds are allowed to be chosen by users with the default setting as `max_eval=30` and `xtol_rel=1e-5`, respectively.
+
+* The identification of inert inputs can be performed using the findInertInput function. As it only depends on the inverse range parameters through Equation (9), there is no extra computational cost in their identification (once the robust GaSP model has been built through the rgasp function). We suggest using the jointly robust prior by setting the argument prior_choice="ref_approx" in the rgasp function before calling the findInertInput function, because the penalty given by this prior is close to an L1 penalty for the logarithm of the marginal likelihood (with the choice of default prior parameters) and, hence, it can shrink the parameters for those inputs with small effect.
+
+## The optimisation algorithm
+
+Although maximum marginal posterior mode estimation with the robust parameterisation eliminates the problems of the correlation matrix being estimated to be either $\textbf{I}_n$ or $\textbf{1}_n\textbf{1}_n^T$, the correlation matrix could still be close to these singularities in some scenarios, particularly when the sample size is very large. In such cases, we also utilize an upper bound for the range parameters $\gamma$ (equivalent to a lower bound for $\beta = 1/\gamma$). The derivation of this bound is discussed in the Appendix. This bound is implemented in the `rgasp` function through the argument lower_bound=TRUE, and this is the default setting in `RobustGaSP`. **As use of the bound is a somewhat ad hoc fix for numerical problems, we encourage users to also try the analysis without the bound; this can be done by specifying `lower_bound=FALSE`.** If the answers are essentially unchanged, one has more confidence that the parameter estimates are satisfactory. Furthermore, if the purpose of the analysis is to detect inert inputs, users are also suggested to use the argument `lower_bound=FALSE` in the `rgasp` function.
+
+Since the marginal posterior distribution could be multi-modal, the package allows for different initial values in the optimization by setting the argument `multiple_starts=TRUE` in the `rgasp` function.
+
+* The **first default initial value** for each inverse range parameter is set to be 50 times their default lower bounds, so the starting value will not be too close to the boundary. 
+* The **second initial value** for each of the inverse range parameter is set to be half of the mean of the jointly robust prior. Two initial values of the nugget-variance parameter are set to be $\eta = 0.0001$ and $\eta = 0.0002$ respectively.
+
+# Examples
+
+## The modified sine wave function
+
+It is expected that, for a one-dimensional function, both packages will perform well with an adequate number of design points, so we start with the function called the modified sine wave discussed in Gu (2016). It has the form $$y = 3\sin(5\pi x) + \cos(7\pi x),$$
+where $x = [0, 10]$. We first perform emulation based on 12 equally spaced design points on [0,1].
+
+```{r, fig.height=3, fig.width=4}
+sinewave <- function(x) {
+  3*sin(5*pi*x)*x + cos(7*pi*x)
+  }
+input <- as.matrix(seq(0, 1, 1/11))
+output <- sinewave(input)
+plot(output ~ input)
+```
+
+The GaSP model is fitted by both the RobustGaSP and DiceKriging packages, with the constant mean function.
+
+```{r}
+m <- rgasp(design=input, response=output)
+m
+```
+
+```{r}
+dk <- km(design = input, response = output)
+dk
+```
+
+**A big difference between two packages is the estimated range parameter** (obtained by finding `1 / m@beta_hat`) which is found to be around `r round(1 / m@beta_hat,2)` in the `RobustGaSP` package, whereas it is found to be very close to zero (`r dk@covariance@range.val`) in the `DiceKriging` package (obtained from `r dk@covariance@range.val`). To see which estimate is better, we perform prediction on 100 test points, equally spaced in [0,1].
+
+```{r}
+testing_input <- as.matrix(seq(0, 1, 1/99))
+m.predict <- predict(m, testing_input)
+dk.predict <- predict(dk, testing_input, type='UK', checkNames = F)
+```
+
+```{r, fig.cap="Figure 6"}
+testing_output <- sinewave(testing_input)
+
+plot(testing_input, m.predict$mean,type='l', col='blue',
+     xlab='input', ylab='output',
+     ylim = c(-5,5))
+polygon( c(testing_input,rev(testing_input)), c(m.predict$lower95,
+                                                rev(m.predict$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,m.predict$mean, type='l', col='blue')
+lines(testing_input,dk.predict$mean, type='l', col='red')
+lines(input, output, type='p', pch=19, cex=0.5)
+```
+
+The emulation results are plotted in Figure 6. Note that the red curve from the `DiceKriging` package degenerates to the fitted mean with spikes at the design points. This unsatisfying phenomenon, discussed in Gu et al. (2018), happens when the estimated covariance matrix is close to an identity matrix, i.e., $\hat{\textbf{R}} \approx \textbf{I}_n$, or equivalently $\hat{\gamma}$ tends to 0. Repeated runs of the `DiceKriging` package under different initializations yielded essentially the same results.
+
+\textcolor{teal}{In their (Matern 5/2) example, changing from 5 to 12 and then to 50 observations has the following effects on the estimates:}
+
+```{r, include=F}
+input.5 <- as.matrix(seq(0, 1, 1/4))
+output.5 <- sinewave(input.5)
+m.5 <- rgasp(design=input.5, response=output.5)
+dk.5 <- km(design = input.5, response = output.5)
+testing_input <- as.matrix(seq(0, 1, 1/99))
+m.predict.5 <- predict(m.5, testing_input)
+dk.predict.5 <- predict(dk.5, testing_input, type='UK', checkNames = F)
+testing_output <- sinewave(testing_input)
+
+input.12 <- as.matrix(seq(0, 1, 1/11))
+output.12 <- sinewave(input.12)
+m.12 <- rgasp(design=input.12, response=output.12)
+dk.12 <- km(design = input.12, response = output.12)
+testing_input <- as.matrix(seq(0, 1, 1/99))
+m.predict.12 <- predict(m.12, testing_input)
+dk.predict.12 <- predict(dk.12, testing_input, type='UK', checkNames = F)
+testing_output <- sinewave(testing_input)
+
+input.50 <- as.matrix(seq(0, 1, 1/49))
+output.50 <- sinewave(input.50)
+m.50 <- rgasp(design=input.50, response=output.50)
+dk.50 <- km(design = input.50, response = output.50)
+testing_input <- as.matrix(seq(0, 1, 1/99))
+m.predict.50 <- predict(m.50, testing_input)
+dk.predict.50 <- predict(dk.50, testing_input, type='UK', checkNames = F)
+testing_output <- sinewave(testing_input)
+```
+
+```{r, fig.height=3, echo=F}
+plot(testing_input, m.predict.5$mean,type='l', col='blue',
+     xlab='input', ylab='output',
+     ylim = c(-5,5),
+     cex=.75, cex.lab=.5, cex.axis=.5)
+polygon( c(testing_input,rev(testing_input)), c(m.predict.5$lower95,
+                                                rev(m.predict.5$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,m.predict.5$mean, type='l', col='blue')
+lines(testing_input,dk.predict.5$mean, type='l', col='red')
+lines(input.5, output.5, type='p', pch=19, cex=0.5)
+```
+
+```{r, fig.height=3, echo=F}
+plot(testing_input, m.predict.12$mean,type='l', col='blue',
+     xlab='input', ylab='output',
+     ylim = c(-5,5),
+     cex=.75, cex.lab=.5, cex.axis=.5)
+polygon( c(testing_input,rev(testing_input)), c(m.predict.12$lower95,
+                                                rev(m.predict.12$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,m.predict.12$mean, type='l', col='blue')
+lines(testing_input,dk.predict.12$mean, type='l', col='red')
+lines(input.12, output.12, type='p', pch=19, cex=0.5)
+```
+
+```{r, fig.height=3, echo=F}
+plot(testing_input, m.predict.50$mean,type='l', col='blue',
+     xlab='input', ylab='output',
+     ylim = c(-5,5),
+     cex=.75, cex.lab=.5, cex.axis=.5)
+polygon( c(testing_input,rev(testing_input)), c(m.predict.50$lower95,
+                                                rev(m.predict.50$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,m.predict.50$mean, type='l', col='blue')
+lines(testing_input,dk.predict.50$mean, type='l', col='red')
+lines(input.50, output.50, type='p', pch=19, cex=0.5)
+```
+
+```{r, echo=F}
+RG_vs_DK_estimates.5 <- data.frame(
+  cbind(
+    c("DiceKriging", "RobustGaSP"),
+    c("Matern 5/2", "Matern 5/2"),
+    round(c(dk.5@trend.coef, m.5@theta_hat),2),
+    round(c(dk.5@covariance@range.val, 1/m.5@beta_hat),2),
+    round(c(dk.5@covariance@sd2, m.5@sigma2_hat),2)
+    )
+  )
+colnames(RG_vs_DK_estimates.5) <- c("Package", "Kernel", "Trend", "Range", "Variance")
+kable(RG_vs_DK_estimates.5, 
+      align=c("l","l","c","c","c"),
+      caption = "Estimates table with 5 observations"
+      )
+```
+
+```{r, echo=F}
+RG_vs_DK_estimates.12 <- data.frame(
+  cbind(
+    c("DiceKriging", "RobustGaSP"),
+    c("Matern 5/2", "Matern 5/2"),
+    round(c(dk.12@trend.coef, m.12@theta_hat),2),
+    round(c(dk.12@covariance@range.val, 1/m.12@beta_hat),2),
+    round(c(dk.12@covariance@sd2, m.12@sigma2_hat),2)
+    )
+  )
+colnames(RG_vs_DK_estimates.12) <- c("Package", "Kernel", "Trend", "Range", "Variance")
+kable(RG_vs_DK_estimates.12, 
+      align=c("l","l","c","c","c"),
+      caption = "Estimates table with 12 observations"
+      )
+```
+
+```{r, echo=F}
+RG_vs_DK_estimates.50 <- data.frame(
+  cbind(
+    c("DiceKriging", "RobustGaSP"),
+    c("Matern 5/2", "Matern 5/2"),
+    round(c(dk.50@trend.coef, m.50@theta_hat),2),
+    round(c(dk.50@covariance@range.val, 1/m.50@beta_hat),2),
+    round(c(dk.50@covariance@sd2, m.50@sigma2_hat),2)
+    )
+  )
+colnames(RG_vs_DK_estimates.50) <- c("Package", "Kernel", "Trend", "Range", "Variance")
+kable(RG_vs_DK_estimates.50, 
+      align=c("l","l","c","c","c"),
+      caption = "Estimates table with 50 observations"
+      )
+```
+
+The predictive mean from the `RobustGaSP` package is plotted as the blue curve in Figure 6 and is quite accurate as an estimate of the true function. Note, however, that the uncertainty in this prediction is quite large, as shown by the wide 95% posterior credible regions.
+
+In this example, adding a nugget is not helpful in `DiceKriging`, as the problem is that $\hat{\textbf{R}} \approx \textbf{I}_n$; adding a nugget is only helpful when the correlation estimate is close to a singular matrix (i.e., $\textbf{R} \approx \textbf{1}_n\textbf{1}_n^T$). However, increasing the sample size is helpful for the parameter estimation. Indeed, emulation of the modified sine wave function using 13 equally spaced design points in [0,1] was successful for one run of `DiceKriging`, as shown in the right panel of Figure 7. However, the left panel in Figure 7 gives another run of `DiceKriging` for this data, and this one converged to the problematical $\gamma \approx 0$.
+
+```{r, include=F}
+seed <- 505
+set.seed(seed)
+input <- as.matrix(seq(0, 1, 1/12))
+output <- sinewave(input)
+m <- rgasp(design=input, response=output)
+dk <- km(design = input, response = output)
+testing_input <- as.matrix(seq(0, 1, 1/99))
+m.predict <- predict(m, testing_input)
+dk.predict <- predict(dk, testing_input, type='UK', checkNames = F)
+testing_output <- sinewave(testing_input)
+
+plot(testing_input, m.predict$mean,type='l', col='blue',
+     xlab='input', ylab='output',
+     ylim = c(-5,5),
+     cex=.75, cex.lab=.5, cex.axis=.5)
+polygon( c(testing_input,rev(testing_input)), c(m.predict$lower95,
+                                                rev(m.predict$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,m.predict$mean, type='l', col='blue')
+lines(testing_input,dk.predict$mean, type='l', col='red')
+lines(input, output, type='p', pch=19, cex=0.5)
+```
+
+```{r, echo=F}
+RG_vs_DK_estimates <- data.frame(
+  cbind(
+    c("DiceKriging", "RobustGaSP"),
+    c("Matern 5/2", "Matern 5/2"),
+    round(c(dk@trend.coef, m@theta_hat),2),
+    round(c(dk@covariance@range.val, 1/m@beta_hat),2),
+    round(c(dk.full@covariance@sd2, m.full@sigma2_hat),2)
+    )
+  )
+colnames(RG_vs_DK_estimates) <- c("Package", "Kernel", "Trend", "Range", "Variance")
+kable(RG_vs_DK_estimates, 
+      align=c("l","l","c","c","c"),
+      caption = "Estimates table with 13 observations (successful run)"
+      )
+```
+
+
+
+```{r, include=F}
+seed <- 507
+set.seed(seed)
+input <- as.matrix(seq(0, 1, 1/12))
+output <- sinewave(input)
+m <- rgasp(design=input, response=output)
+dk <- km(design = input, response = output)
+testing_input <- as.matrix(seq(0, 1, 1/99))
+m.predict <- predict(m, testing_input)
+dk.predict <- predict(dk, testing_input, type='UK', checkNames = F)
+testing_output <- sinewave(testing_input)
+
+plot(testing_input, m.predict$mean,type='l', col='blue',
+     xlab='input', ylab='output',
+     ylim = c(-5,5),
+     cex=.75, cex.lab=.5, cex.axis=.5)
+polygon( c(testing_input,rev(testing_input)), c(m.predict$lower95,
+                                                rev(m.predict$upper95)), col = "grey80", border = F)
+lines(testing_input, testing_output)
+lines(testing_input,m.predict$mean, type='l', col='blue')
+lines(testing_input,dk.predict$mean, type='l', col='red')
+lines(input, output, type='p', pch=19, cex=0.5)
+```
+
+```{r, echo=F}
+RG_vs_DK_estimates <- data.frame(
+  cbind(
+    c("DiceKriging", "RobustGaSP"),
+    c("Matern 5/2", "Matern 5/2"),
+    round(c(dk@trend.coef, m@theta_hat),2),
+    round(c(dk@covariance@range.val, 1/m@beta_hat),2),
+    round(c(dk.full@covariance@sd2, m.full@sigma2_hat),2)
+    )
+  )
+colnames(RG_vs_DK_estimates) <- c("Package", "Kernel", "Trend", "Range", "Variance")
+kable(RG_vs_DK_estimates, 
+      align=c("l","l","c","c","c"),
+      caption = "Estimates table with 13 observations (unsuccessful run)"
+      )
+```
+
+The predictive mean from `RobustGaSP` is stable. Interestingly, the uncertainty produced by `RobustGaSP` decreased markedly with the larger number of design points.
+
+\textcolor{teal}{No matter the number of observations, or whether or not `DiceKriging` converges to the problematic $\gamma \approx 0$, the variance parameter remains the same in the repective packages: `r round(dk.full@covariance@sd2)` for `DiceKriging` and `r round(m.full@sigma2_hat)` for `RobustGaSP`.}
+
+It is somewhat of a surprise that even emulation of a smooth one-dimensional function can be problematical. The difficulties with a multi-dimensional input space can be considerably greater, as indicated in the next example.
+
+## The Friedman function
+
+### Constant mean basis function
+
+The Friedman function was introduced in Friedman (1991) and is given by $$y = 10\sin(\pi x_1 x_2) + 20(x_3 - 0.5)^2 + 10x_4 + 5x_5,$$, where $x_i \in [0,1]]$ for $i = 1, \dots , 5$. 40 design points are drawn from maximin LH samples. A GaSP model
+is fitted using the `RobustGaSP` package and the `DiceKriging` package with the constant mean basis
+function (i.e., $h(\textbf{x}) = 1$).
+
+```{r}
+set.seed(1)
+input <- maximinLHS(n=40, k=5)
+num_obs <- dim(input)[1]
+output <- rep(0, num_obs)
+for(i in 1:num_obs) {
+  output[i] <- friedman.5.data(input[i,])
+  }
+m <-rgasp(design=input, response=output)
+dk <- km(design=input, response=output)
+```
+
+Prediction on 200 test points, uniformly sampled from $[0,1]^5$, is then performed.
+
+```{r}
+dim_inputs <- dim(input)[2]
+num_testing_input <- 200
+testing_input <-
+  matrix(runif(num_testing_input * dim_inputs),
+         num_testing_input, dim_inputs)
+m.predict <- predict(m, testing_input)
+dk.predict <- predict(dk, testing_input, type='UK', checkNames=F)
+```
+
+To compare the performance, we calculate the root mean square errors (RMSE) for both methods, $$RMSE = \sqrt{\dfrac{\Sigma_{i=1}
+^{n^*} (\hat{y}(\textbf{x}_i^*) - y(\textbf{x}_i^*))^2}{n^*}}$$,
+where $y(\textbf{x}_i^*)$ is the $i$-th held-out output and $\hat{y}(\textbf{x}_i^*)$ is the prediction for $\textbf{x}_i^*$ by the emulator, for $i = 1, \dots, n^*$.
+
+```{r}
+testing_output <- matrix(NA, num_testing_input, 1)
+for(i in 1:num_testing_input) {
+  testing_output[i] <- friedman.5.data(testing_input[i,])
+  }
+m.rmse <- sqrt(mean((m.predict$mean - testing_output)^2))
+m.rmse
+
+dk.rmse <- sqrt(mean((dk.predict$mean - testing_output)^2))
+dk.rmse
+```
+
+```{r, fig.cap="Figure 8"}
+plot(testing_output ~ m.predict$mean,
+     col="blue", pch=19, cex=0.25)
+points(testing_output ~ dk.predict$mean,
+       col="red", pch=19, cex=0.25)
+abline(0,1)
+```
+
+Thus the RMSE from `RobustGaSP` is 0.28, while the RMSE from `RobustGaSP` is 0.89. The predictions versus the real outputs are plotted in Figure 8. The black circles correspond to the predictive means from the `RobustGaSP` package and are closer to the real output than the red circles produced by the `DiceKriging` package. Since both packages use the same correlation and mean function, the only difference lies in the method of parameter estimation, especially estimation of the range parameters, $\gamma$. The `RobustGaSP` package seems to do better, leading to much smaller RMSE in out-of-sample prediction.
+
+### Linear mean basis function
+
+The Friedman function has a linear trend associated with the 4th and the 5th inputs (but not the first three) so we use this example to illustrate specifying a trend in the GaSP model. For realism (one rarely actually knows the trend for a computer model), we specify a linear trend for all variables; thus we use $\textbf{h}(\textbf{x}) = (1, \textbf{x})$, where $\textbf{x} = x_1, \dots, x_5)$ and investigate whether or not adding this linear trend to all inputs is helpful for the prediction.
+
+```{r}
+set.seed(1)
+colnames(input) <- c("x1", "x2", "x3", "x4", "x5")
+trend.rgasp <- cbind(rep(1, num_obs), input)
+m.trend <- rgasp(design=input, response=output, trend=trend.rgasp)
+dk.trend <- km(formula ~ x1 + x2 + x3 + x4 + x5, design=input, response=output)
+colnames(testing_input) <- c("x1", "x2", "x3", "x4", "x5")
+trend.test.rgasp <- cbind(rep(1, num_testing_input), testing_input)
+m.trend.predict <- predict(m.trend, testing_input,
+                           testing_trend=trend.test.rgasp)
+dk.trend.predict <- predict(dk.trend, testing_input, type='UK')
+```
+
+```{r}
+m.trend.rmse <- sqrt(mean( (m.trend.predict$mean - testing_output)^2))
+m.trend.rmse
+
+dk.trend.rmse <- sqrt(mean((dk.trend.predict$mean - testing_output)^2))
+dk.trend.rmse
+```
+
+Adding a linear trend does improve the out-of-sample prediction accuracy of the `RobustGaSP` package; the RMSE decreases to `r round(m.trend.rmse,2)`, which is about `r round(100*m.trend.rmse/m.rmse)`% of the RMSE of the previous model with the constant mean. However, for `DiceKriging` the RMSE increases from `r round(dk.rmse,2)` to `r round(dk.trend.rmse,2)`, more than `r floor(dk.trend.rmse/m.trend.rmse)` times larger than that for the `RobustGaSP.` (**That the RMSE actually increased for `DiceKriging` is likely due to the additional difficulty of parameter estimation, since now the additional linear trend parameters needed to be estimated**; \textcolor{teal}{in contrast, for `RobustGaSP`, the linear trend parameters are effectively eliminated through objective Bayesian integration.}) The predictions against the real output are plotted in Figure 9. The blue dots circles correspond to the predictive means from the `RobustGaSP` package, and are an excellent match to the real outputs.
+
+```{r, fig.cap="Figure 9"}
+plot(testing_output ~ m.trend.predict$mean,
+     col="blue", pch=19, cex=0.25)
+points(testing_output ~ dk.trend.predict$mean,
+       col="red", pch=19, cex=0.25)
+abline(0,1)
+```
